@@ -1,0 +1,1569 @@
+import { useState, useEffect, useRef } from "react";
+
+// ─── MOCK DATA ───────────────────────────────────────────────────────────────
+const INIT_EPIS = [
+  { id: 1, nome: "Capacete de Segurança", ca: "CA-12345", categoria: "Proteção da Cabeça", estoque: 45, minimo: 10, validade: "2026-12-01", img: "🪖", periodicidade: 365, descricao: "Capacete classe B, cor amarela, com carneira regulável", norma: "NBR 8221", fabricante: "3M do Brasil" },
+  { id: 2, nome: "Luva de Raspa", ca: "CA-22110", categoria: "Proteção das Mãos", estoque: 8, minimo: 20, validade: "2025-06-15", img: "🧤", periodicidade: 90, descricao: "Luva de couro raspa boi, cano curto 15cm", norma: "NBR 13.921", fabricante: "Kalipso" },
+  { id: 3, nome: "Bota de Segurança", ca: "CA-33890", categoria: "Proteção dos Pés", estoque: 22, minimo: 15, validade: "2027-03-10", img: "🥾", periodicidade: 180, descricao: "Bota PVC cano médio, biqueira de aço, solado antiderrapante", norma: "NBR 14835", fabricante: "Bracol" },
+  { id: 4, nome: "Óculos de Proteção", ca: "CA-44561", categoria: "Proteção Visual", estoque: 60, minimo: 25, validade: "2026-08-20", img: "🥽", periodicidade: 180, descricao: "Óculos ampla visão, lente incolor, antirrisco e antiembaçante", norma: "NBR 15011", fabricante: "Uvex" },
+  { id: 5, nome: "Protetor Auricular", ca: "CA-55230", categoria: "Proteção Auditiva", estoque: 3, minimo: 30, validade: "2025-12-31", img: "🔇", periodicidade: 30, descricao: "Protetor auditivo espuma descartável, NRR-SF 26dB", norma: "NBR 10657", fabricante: "3M do Brasil" },
+  { id: 6, nome: "Colete Refletivo", ca: "CA-66780", categoria: "Sinalização", estoque: 18, minimo: 12, validade: "2026-05-01", img: "🦺", periodicidade: 365, descricao: "Colete refletivo laranja, faixas de 5cm em prata, classe 2", norma: "NBR 15292", fabricante: "Omni" },
+];
+
+const INIT_FUNCIONARIOS = [
+  { id: 1, nome: "Carlos Eduardo Silva", matricula: "F001", setor: "Produção", cargo: "Operador de Máquina", email: "carlos@empresa.com", telefone: "(11) 99999-0001", admissao: "2022-03-15", biometrias: [{ tipo: "facial", data: "2024-01-10", qualidade: 94.2 }, { tipo: "digital", data: "2024-01-10", qualidade: 98.1 }] },
+  { id: 2, nome: "Ana Paula Ferreira", matricula: "F002", setor: "Manutenção", cargo: "Técnica de Manutenção", email: "ana@empresa.com", telefone: "(11) 99999-0002", admissao: "2021-07-01", biometrias: [{ tipo: "facial", data: "2024-02-05", qualidade: 91.7 }] },
+  { id: 3, nome: "PICA MOLE Roberto Mendes Costa ", matricula: "F003", setor: "Logística", cargo: "Auxiliar de Logística", email: "roberto@empresa.com", telefone: "(11) 99999-0003", admissao: "2023-01-10", biometrias: [] },
+  { id: 4, nome: "Fernanda Lima Souza", matricula: "F004", setor: "Qualidade", cargo: "Inspetora de Qualidade", email: "fernanda@empresa.com", telefone: "(11) 99999-0004", admissao: "2020-11-20", biometrias: [{ tipo: "digital", data: "2024-03-01", qualidade: 97.3 }] },
+  { id: 5, nome: "Marcos Antônio Rocha", matricula: "F005", setor: "Segurança", cargo: "Técnico de Segurança", email: "marcos@empresa.com", telefone: "(11) 99999-0005", admissao: "2019-05-15", biometrias: [] },
+];
+
+const INIT_ENTREGAS = [
+  { id: 1, funcionario_id: 1, funcionario: "Carlos Eduardo Silva", data: "2025-01-15", itens: [{ epi_id: 1, nome: "Capacete de Segurança", img: "🪖", qtd: 1 }, { epi_id: 4, nome: "Óculos de Proteção", img: "🥽", qtd: 1 }, { epi_id: 6, nome: "Colete Refletivo", img: "🦺", qtd: 1 }], status: "assinado", tipo_assinatura: "facial", confianca: 94.2 },
+  { id: 2, funcionario_id: 2, funcionario: "Ana Paula Ferreira", data: "2025-01-28", itens: [{ epi_id: 2, nome: "Luva de Raspa", img: "🧤", qtd: 2 }, { epi_id: 3, nome: "Bota de Segurança", img: "🥾", qtd: 1 }], status: "assinado", tipo_assinatura: "digital", confianca: 98.7 },
+  { id: 3, funcionario_id: 3, funcionario: "Roberto Mendes Costa", data: "2025-02-25", itens: [{ epi_id: 5, nome: "Protetor Auricular", img: "🔇", qtd: 4 }, { epi_id: 2, nome: "Luva de Raspa", img: "🧤", qtd: 2 }], status: "pendente_assinatura", tipo_assinatura: null, confianca: null },
+  { id: 4, funcionario_id: 4, funcionario: "Fernanda Lima Souza", data: "2024-10-20", itens: [{ epi_id: 4, nome: "Óculos de Proteção", img: "🥽", qtd: 1 }], status: "assinado", tipo_assinatura: "manual", confianca: null },
+  { id: 5, funcionario_id: 5, funcionario: "Marcos Antônio Rocha", data: "2025-02-15", itens: [{ epi_id: 1, nome: "Capacete de Segurança", img: "🪖", qtd: 1 }, { epi_id: 3, nome: "Bota de Segurança", img: "🥾", qtd: 1 }, { epi_id: 6, nome: "Colete Refletivo", img: "🦺", qtd: 1 }, { epi_id: 4, nome: "Óculos de Proteção", img: "🥽", qtd: 1 }, { epi_id: 2, nome: "Luva de Raspa", img: "🧤", qtd: 2 }], status: "cancelado", tipo_assinatura: null, confianca: null },
+  { id: 6, funcionario_id: 1, funcionario: "Carlos Eduardo Silva", data: "2024-08-10", itens: [{ epi_id: 2, nome: "Luva de Raspa", img: "🧤", qtd: 2 }], status: "assinado", tipo_assinatura: "digital", confianca: 96.5 },
+];
+
+// ─── STYLES ──────────────────────────────────────────────────────────────────
+const css = `
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700;800;900&family=IBM+Plex+Mono:wght@300;400;500&family=Barlow:wght@300;400;500;600&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #080b10; --surface: #0f1520; --surface2: #161e2d;
+    --border: #1e2d42; --border2: #243347;
+    --orange: #f5a623; --orange-dim: rgba(245,166,35,0.12); --orange-glow: rgba(245,166,35,0.25);
+    --red: #ff4757; --green: #2ed573; --blue: #1e90ff; --purple: #a855f7;
+    --text: #e8edf5; --text2: #8899aa; --text3: #4a5a6b;
+  }
+  body { background: var(--bg); font-family: 'Barlow', sans-serif; color: var(--text); }
+  .app { display: flex; height: 100vh; overflow: hidden; }
+  .sidebar { width: 220px; min-width: 220px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .sidebar-logo { padding: 20px 20px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .logo-icon { width: 36px; height: 36px; background: var(--orange); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .logo-text { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 17px; letter-spacing: 0.5px; line-height: 1.1; }
+  .logo-sub { font-size: 10px; color: var(--text3); font-family: 'IBM Plex Mono', monospace; letter-spacing: 1px; }
+  .nav { flex: 1; padding: 12px 0; overflow-y: auto; }
+  .nav-section { padding: 6px 16px 4px; font-size: 9px; color: var(--text3); letter-spacing: 2px; font-family: 'IBM Plex Mono', monospace; text-transform: uppercase; margin-top: 8px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; cursor: pointer; transition: all 0.15s; color: var(--text2); font-size: 13.5px; font-weight: 500; border-left: 2px solid transparent; margin: 1px 0; }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: var(--orange-dim); color: var(--orange); border-left-color: var(--orange); }
+  .nav-icon { font-size: 15px; width: 18px; text-align: center; }
+  .nav-badge { margin-left: auto; background: var(--red); color: white; font-size: 10px; border-radius: 10px; padding: 1px 6px; font-weight: 700; }
+  .sidebar-user { padding: 14px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .user-avatar { width: 32px; height: 32px; background: var(--orange); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: #000; flex-shrink: 0; }
+  .user-name { font-size: 12.5px; font-weight: 600; line-height: 1.2; }
+  .user-role { font-size: 10px; color: var(--text3); font-family: 'IBM Plex Mono', monospace; }
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar { height: 56px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; gap: 12px; flex-shrink: 0; }
+  .topbar-title { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+  .topbar-sub { font-size: 12px; color: var(--text3); font-family: 'IBM Plex Mono', monospace; }
+  .topbar-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .content { flex: 1; overflow-y: auto; padding: 24px; }
+  .btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; font-family: 'Barlow', sans-serif; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: var(--orange); color: #000; }
+  .btn-primary:hover { background: #f0b040; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border2); }
+  .btn-ghost:hover { background: var(--surface2); color: var(--text); }
+  .btn-danger { background: rgba(255,71,87,0.15); color: var(--red); border: 1px solid rgba(255,71,87,0.3); }
+  .btn-danger:hover { background: rgba(255,71,87,0.25); }
+  .btn-success { background: rgba(46,213,115,0.15); color: var(--green); border: 1px solid rgba(46,213,115,0.3); }
+  .btn-success:hover { background: rgba(46,213,115,0.25); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn-xs { padding: 3px 8px; font-size: 11px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+  .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .card-title { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 0.5px; color: var(--text2); text-transform: uppercase; }
+  .card-body { padding: 20px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; position: relative; overflow: hidden; }
+  .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+  .stat-card.orange::before { background: var(--orange); }
+  .stat-card.green::before { background: var(--green); }
+  .stat-card.red::before { background: var(--red); }
+  .stat-card.blue::before { background: var(--blue); }
+  .stat-card.purple::before { background: var(--purple); }
+  .stat-icon { font-size: 24px; margin-bottom: 10px; }
+  .stat-value { font-family: 'Barlow Condensed', sans-serif; font-size: 36px; font-weight: 800; line-height: 1; }
+  .stat-card.orange .stat-value { color: var(--orange); }
+  .stat-card.green .stat-value { color: var(--green); }
+  .stat-card.red .stat-value { color: var(--red); }
+  .stat-card.blue .stat-value { color: var(--blue); }
+  .stat-card.purple .stat-value { color: var(--purple); }
+  .stat-label { font-size: 11px; color: var(--text3); font-family: 'IBM Plex Mono', monospace; letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th { padding: 10px 16px; text-align: left; font-size: 10px; color: var(--text3); font-family: 'IBM Plex Mono', monospace; letter-spacing: 1.5px; text-transform: uppercase; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 12px 16px; font-size: 13.5px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; font-family: 'IBM Plex Mono', monospace; white-space: nowrap; }
+  .badge-green { background: rgba(46,213,115,0.12); color: var(--green); }
+  .badge-red { background: rgba(255,71,87,0.12); color: var(--red); }
+  .badge-orange { background: var(--orange-dim); color: var(--orange); }
+  .badge-gray { background: rgba(136,153,170,0.12); color: var(--text2); }
+  .badge-blue { background: rgba(30,144,255,0.12); color: var(--blue); }
+  .badge-purple { background: rgba(168,85,247,0.12); color: var(--purple); }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .epi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .epi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; transition: all 0.15s; cursor: pointer; }
+  .epi-card:hover { border-color: var(--orange); background: var(--surface2); transform: translateY(-1px); }
+  .epi-card.low { border-color: rgba(255,71,87,0.4); }
+  .epi-icon { font-size: 36px; margin-bottom: 12px; }
+  .epi-name { font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 700; margin-bottom: 2px; }
+  .epi-ca { font-size: 11px; color: var(--text3); font-family: 'IBM Plex Mono', monospace; }
+  .epi-stock { margin-top: 12px; display: flex; align-items: center; justify-content: space-between; }
+  .stock-bar-wrap { background: var(--surface2); border-radius: 4px; height: 4px; flex: 1; margin: 0 10px; overflow: hidden; }
+  .stock-bar { height: 100%; border-radius: 4px; transition: width 0.5s; }
+  .stock-num { font-size: 12px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; }
+  .func-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .func-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: flex; gap: 14px; align-items: flex-start; transition: all 0.15s; }
+  .func-card:hover { border-color: var(--border2); }
+  .func-avatar { width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, #1e3a5f, #0a1929); border: 2px solid var(--border2); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; color: var(--orange); flex-shrink: 0; }
+  .func-name { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+  .func-info { font-size: 11px; color: var(--text3); font-family: 'IBM Plex Mono', monospace; }
+  .func-tags { margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+  .modal { background: var(--surface); border: 1px solid var(--border2); border-radius: 14px; width: 100%; max-width: 580px; max-height: 90vh; overflow-y: auto; animation: modalIn 0.2s ease; }
+  .modal-lg { max-width: 740px; }
+  @keyframes modalIn { from { opacity: 0; transform: translateY(16px) scale(0.97); } to { opacity: 1; transform: none; } }
+  .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: var(--surface); z-index: 2; }
+  .modal-title { font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 700; }
+  .modal-body { padding: 24px; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .close-btn { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 22px; line-height: 1; border-radius: 4px; padding: 2px 6px; }
+  .close-btn:hover { color: var(--text); background: var(--surface2); }
+  .bio-panel { display: flex; flex-direction: column; gap: 12px; }
+  .bio-option { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; cursor: pointer; transition: all 0.2s; display: flex; gap: 14px; align-items: center; }
+  .bio-option:hover, .bio-option.active { border-color: var(--orange); background: var(--orange-dim); }
+  .bio-option-icon { font-size: 26px; }
+  .bio-option-title { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+  .bio-option-desc { font-size: 12px; color: var(--text3); }
+  .face-capture { background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px; aspect-ratio: 4/3; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+  .face-guide { width: 120px; height: 150px; border: 2px solid var(--orange); border-radius: 60px; position: absolute; animation: facePulse 2s ease-in-out infinite; }
+  @keyframes facePulse { 0%, 100% { opacity: 0.4; transform: scale(1); } 50% { opacity: 1; transform: scale(1.02); } }
+  .scan-line { position: absolute; width: 100%; height: 2px; background: linear-gradient(90deg, transparent, var(--orange), transparent); animation: scan 2s linear infinite; }
+  @keyframes scan { 0% { top: 20%; } 100% { top: 80%; } }
+  .steps { display: flex; gap: 0; margin-bottom: 24px; }
+  .step { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; }
+  .step:not(:last-child)::after { content: ''; position: absolute; top: 15px; left: 50%; width: 100%; height: 1px; background: var(--border); }
+  .step:not(:last-child).done::after { background: var(--orange); }
+  .step-circle { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; background: var(--surface); z-index: 1; font-family: 'IBM Plex Mono', monospace; transition: all 0.2s; }
+  .step.active .step-circle { border-color: var(--orange); color: var(--orange); }
+  .step.done .step-circle { border-color: var(--orange); background: var(--orange); color: #000; }
+  .step-label { font-size: 10px; color: var(--text3); margin-top: 6px; text-align: center; font-family: 'IBM Plex Mono', monospace; }
+  .step.active .step-label { color: var(--orange); }
+  .input-group { margin-bottom: 14px; }
+  .input-label { font-size: 11px; color: var(--text2); font-family: 'IBM Plex Mono', monospace; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; display: block; }
+  .input { width: 100%; background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; padding: 10px 12px; color: var(--text); font-size: 13.5px; font-family: 'Barlow', sans-serif; outline: none; transition: all 0.15s; }
+  .input:focus { border-color: var(--orange); }
+  textarea.input { resize: vertical; min-height: 70px; }
+  select.input { appearance: none; cursor: pointer; }
+  .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .alert { padding: 12px 16px; border-radius: 8px; font-size: 13px; display: flex; gap: 10px; align-items: flex-start; }
+  .alert-warning { background: rgba(245,166,35,0.1); border: 1px solid rgba(245,166,35,0.3); color: var(--orange); }
+  .alert-error { background: rgba(255,71,87,0.1); border: 1px solid rgba(255,71,87,0.3); color: var(--red); }
+  .alert-success { background: rgba(46,213,115,0.1); border: 1px solid rgba(46,213,115,0.3); color: var(--green); }
+  .alert-info { background: rgba(30,144,255,0.1); border: 1px solid rgba(30,144,255,0.3); color: var(--blue); }
+  .toast-container { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 9999; }
+  .toast { background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px; padding: 12px 16px; min-width: 280px; display: flex; gap: 10px; align-items: center; animation: toastIn 0.25s ease; font-size: 13px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+  .toast.success { border-left: 3px solid var(--green); }
+  .toast.error { border-left: 3px solid var(--red); }
+  .toast.info { border-left: 3px solid var(--orange); }
+  .confidence-meter { }
+  .confidence-label { display: flex; justify-content: space-between; font-size: 11px; font-family: 'IBM Plex Mono', monospace; margin-bottom: 6px; }
+  .confidence-bar { background: var(--surface2); border-radius: 4px; height: 8px; overflow: hidden; }
+  .confidence-fill { height: 100%; border-radius: 4px; transition: width 1s ease; }
+  .login-screen { min-height: 100vh; background: var(--bg); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+  .login-bg { position: absolute; inset: 0; opacity: 0.03; background-image: repeating-linear-gradient(0deg, var(--orange) 0px, var(--orange) 1px, transparent 1px, transparent 40px), repeating-linear-gradient(90deg, var(--orange) 0px, var(--orange) 1px, transparent 1px, transparent 40px); }
+  .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px; width: 100%; max-width: 380px; position: relative; z-index: 1; }
+  .login-logo { text-align: center; margin-bottom: 32px; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+  .empty-state { text-align: center; padding: 40px; color: var(--text3); }
+  .empty-icon { font-size: 40px; margin-bottom: 10px; }
+  .pulse { animation: pulse 2s ease infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .sig-canvas { background: #fff; border-radius: 8px; cursor: crosshair; display: block; touch-action: none; }
+  .tag { display: inline-block; padding: 2px 8px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 4px; font-size: 11px; color: var(--text2); }
+  .section-title { font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .urgency-critical { color: var(--red); font-weight: 700; }
+  .urgency-warning { color: var(--orange); font-weight: 600; }
+  .urgency-ok { color: var(--green); }
+  .action-btns { display: flex; gap: 6px; }
+  .bio-registered-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
+  .confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+  .confirm-box { background: var(--surface); border: 1px solid var(--border2); border-radius: 12px; padding: 28px; max-width: 360px; width: 100%; text-align: center; animation: modalIn 0.2s ease; }
+  .confirm-icon { font-size: 40px; margin-bottom: 12px; }
+  .confirm-title { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+  .confirm-desc { font-size: 13px; color: var(--text3); margin-bottom: 20px; line-height: 1.5; }
+  .confirm-btns { display: flex; gap: 10px; justify-content: center; }
+  .tab-bar { display: flex; gap: 4px; margin-bottom: 20px; background: var(--surface); padding: 4px; border-radius: 8px; border: 1px solid var(--border); width: fit-content; }
+  .tab { padding: 7px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text3); transition: all 0.15s; }
+  .tab.active { background: var(--orange); color: #000; }
+  .tab:hover:not(.active) { color: var(--text); background: var(--surface2); }
+`;
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+function addDays(dateStr, days) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+function daysUntil(date) {
+  const now = new Date();
+  now.setHours(0,0,0,0);
+  const diff = Math.round((date - now) / 86400000);
+  return diff;
+}
+function fmtDate(d) {
+  return d.toLocaleDateString("pt-BR");
+}
+
+function useToast() {
+  const [toasts, setToasts] = useState([]);
+  const add = (msg, type = "info") => {
+    const id = Date.now();
+    setToasts(t => [...t, { id, msg, type }]);
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3500);
+  };
+  return { toasts, add };
+}
+
+function ToastContainer({ toasts }) {
+  return (
+    <div className="toast-container">
+      {toasts.map(t => (
+        <div key={t.id} className={`toast ${t.type}`}>
+          {t.type === "success" ? "✅" : t.type === "error" ? "❌" : "ℹ️"}
+          <span>{t.msg}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ConfirmDialog({ icon, title, desc, onConfirm, onCancel, confirmLabel = "Confirmar", danger = false }) {
+  return (
+    <div className="confirm-overlay">
+      <div className="confirm-box">
+        <div className="confirm-icon">{icon}</div>
+        <div className="confirm-title">{title}</div>
+        <div className="confirm-desc">{desc}</div>
+        <div className="confirm-btns">
+          <button className="btn btn-ghost" onClick={onCancel}>Cancelar</button>
+          <button className={`btn ${danger ? "btn-danger" : "btn-primary"}`} onClick={onConfirm}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── LOGIN ────────────────────────────────────────────────────────────────────
+function LoginPage({ onLogin }) {
+  const [user, setUser] = useState("admin");
+  const [pass, setPass] = useState("admin123");
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+  const submit = () => {
+    if (user === "admin" && pass === "admin123") { setLoading(true); setTimeout(() => onLogin(), 900); }
+    else setErr("Credenciais inválidas");
+  };
+  return (
+    <div className="login-screen">
+      <div className="login-bg" />
+      <div className="login-card">
+        <div className="login-logo">
+          <div style={{ fontSize: 48, marginBottom: 10 }}>🦺</div>
+          <div style={{ fontFamily: "Barlow Condensed", fontSize: 26, fontWeight: 800 }}>SISTEMA EPI</div>
+          <div style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono", letterSpacing: 1 }}>CONTROLE DE EQUIPAMENTOS · v2.1</div>
+        </div>
+        <div className="input-group"><label className="input-label">Usuário</label><input className="input" value={user} onChange={e => { setUser(e.target.value); setErr(""); }} /></div>
+        <div className="input-group"><label className="input-label">Senha</label><input className="input" type="password" value={pass} onChange={e => { setPass(e.target.value); setErr(""); }} onKeyDown={e => e.key === "Enter" && submit()} /></div>
+        {err && <div className="alert alert-error" style={{ marginBottom: 14 }}>⚠️ {err}</div>}
+        <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center", padding: 11 }} onClick={submit} disabled={loading}>
+          {loading ? <><span className="pulse">●</span> Autenticando...</> : "Entrar"}
+        </button>
+        <div style={{ marginTop: 14, padding: "10px 14px", background: "var(--surface2)", borderRadius: 8, fontSize: 11, fontFamily: "IBM Plex Mono", color: "var(--text3)" }}>
+          Demo: admin / admin123
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
+function Dashboard({ epis, funcionarios, entregas, onNav }) {
+  const [animated, setAnimated] = useState(false);
+  useEffect(() => { setTimeout(() => setAnimated(true), 100); }, []);
+  const alertas = epis.filter(e => e.estoque <= e.minimo);
+  const pendentes = entregas.filter(e => e.status === "pendente_assinatura");
+
+  return (
+    <div>
+      <div className="stats-grid">
+        {[
+          { icon: "📦", value: epis.length, label: "EPIs Cadastrados", color: "orange" },
+          { icon: "👷", value: funcionarios.length, label: "Funcionários", color: "blue" },
+          { icon: "📋", value: entregas.filter(e => e.status === "assinado").length, label: "Entregas Assinadas", color: "green" },
+          { icon: "⚠️", value: alertas.length + pendentes.length, label: "Alertas Pendentes", color: "red" },
+        ].map((s, i) => (
+          <div key={i} className={`stat-card ${s.color}`} style={{ opacity: animated ? 1 : 0, transform: animated ? "none" : "translateY(12px)", transition: `all 0.4s ${i * 0.08}s` }}>
+            <div className="stat-icon">{s.icon}</div>
+            <div className="stat-value">{s.value}</div>
+            <div className="stat-label">{s.label}</div>
+          </div>
+        ))}
+      </div>
+      <div className="two-col">
+        <div className="card">
+          <div className="card-header"><span className="card-title">Últimas Entregas</span><button className="btn btn-ghost btn-sm" onClick={() => onNav("entregas")}>Ver todas</button></div>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Funcionário</th><th>Status</th><th>Assinatura</th></tr></thead>
+              <tbody>
+                {entregas.slice(0, 4).map(e => (
+                  <tr key={e.id}>
+                    <td><div style={{ fontWeight: 600, fontSize: 13 }}>{e.funcionario.split(" ").slice(0, 2).join(" ")}</div><div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>{e.data}</div></td>
+                    <td>
+                      {e.status === "assinado" && <span className="badge badge-green">✓ Assinado</span>}
+                      {e.status === "pendente_assinatura" && <span className="badge badge-orange">⏳ Pendente</span>}
+                      {e.status === "cancelado" && <span className="badge badge-gray">✕ Cancelado</span>}
+                    </td>
+                    <td>
+                      {e.tipo_assinatura === "facial" && <span className="badge badge-blue">👤 Facial</span>}
+                      {e.tipo_assinatura === "digital" && <span className="badge badge-blue">👆 Digital</span>}
+                      {e.tipo_assinatura === "manual" && <span className="badge badge-gray">✍️ Manual</span>}
+                      {!e.tipo_assinatura && <span style={{ color: "var(--text3)", fontSize: 12 }}>—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-header"><span className="card-title">🔴 Alertas</span></div>
+          <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {alertas.map(e => (<div key={e.id} className="alert alert-error"><div style={{ fontSize: 18 }}>{e.img}</div><div><div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{e.nome}</div><div style={{ fontSize: 11, opacity: 0.8 }}>Estoque: {e.estoque} · Mínimo: {e.minimo}</div></div></div>))}
+            {pendentes.map(e => (<div key={e.id} className="alert alert-warning"><div style={{ fontSize: 18 }}>📋</div><div><div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>Entrega #{String(e.id).padStart(4,"0")} pendente</div><div style={{ fontSize: 11, opacity: 0.8 }}>{e.funcionario.split(" ")[0]} · Aguardando assinatura</div></div></div>))}
+            {alertas.length === 0 && pendentes.length === 0 && <div className="empty-state"><div className="empty-icon">✅</div>Tudo em ordem</div>}
+          </div>
+        </div>
+      </div>
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="card-header"><span className="card-title">Ações Rápidas</span></div>
+        <div className="card-body" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button className="btn btn-primary" onClick={() => onNav("nova-entrega")}>📋 Nova Entrega</button>
+          <button className="btn btn-ghost" onClick={() => onNav("cancelar-entrega")}>🚫 Cancelar Entrega</button>
+          <button className="btn btn-ghost" onClick={() => onNav("funcionarios")}>👷 Funcionários</button>
+          <button className="btn btn-ghost" onClick={() => onNav("biometria")}>👆 Biometria</button>
+          <button className="btn btn-ghost" onClick={() => onNav("relatorio-troca")}>🔄 Relatório de Trocas</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── EPI MODAL ────────────────────────────────────────────────────────────────
+function EpiModal({ epi, onClose, onSave }) {
+  const [f, setF] = useState({ ...epi });
+  const emojis = ["🪖","🧤","🥾","🥽","🔇","🦺","😷","🧣","🧰","🔦"];
+  const categorias = ["Proteção da Cabeça","Proteção das Mãos","Proteção dos Pés","Proteção Visual","Proteção Auditiva","Sinalização","Proteção Respiratória","Proteção do Corpo"];
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <span className="modal-title">{epi.id ? `Editar — ${epi.nome}` : "Novo EPI"}</span>
+          <button className="close-btn" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body">
+          <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+            {emojis.map(e => (<button key={e} onClick={() => setF(p => ({ ...p, img: e }))} style={{ fontSize: 22, background: f.img === e ? "var(--orange-dim)" : "var(--surface2)", border: `1px solid ${f.img === e ? "var(--orange)" : "var(--border)"}`, borderRadius: 6, padding: 6, cursor: "pointer" }}>{e}</button>))}
+          </div>
+          <div className="input-row">
+            <div className="input-group"><label className="input-label">Nome do EPI</label><input className="input" value={f.nome} onChange={e => setF(p => ({ ...p, nome: e.target.value }))} /></div>
+            <div className="input-group"><label className="input-label">Número CA</label><input className="input" value={f.ca} onChange={e => setF(p => ({ ...p, ca: e.target.value }))} /></div>
+          </div>
+          <div className="input-row">
+            <div className="input-group"><label className="input-label">Categoria</label><select className="input" value={f.categoria} onChange={e => setF(p => ({ ...p, categoria: e.target.value }))}>{categorias.map(c => <option key={c}>{c}</option>)}</select></div>
+            <div className="input-group"><label className="input-label">Fabricante</label><input className="input" value={f.fabricante} onChange={e => setF(p => ({ ...p, fabricante: e.target.value }))} /></div>
+          </div>
+          <div className="input-row">
+            <div className="input-group"><label className="input-label">Norma Técnica</label><input className="input" value={f.norma} onChange={e => setF(p => ({ ...p, norma: e.target.value }))} /></div>
+            <div className="input-group"><label className="input-label">Validade do CA</label><input className="input" type="date" value={f.validade} onChange={e => setF(p => ({ ...p, validade: e.target.value }))} /></div>
+          </div>
+          <div className="input-row">
+            <div className="input-group"><label className="input-label">Estoque Atual</label><input className="input" type="number" value={f.estoque} onChange={e => setF(p => ({ ...p, estoque: +e.target.value }))} /></div>
+            <div className="input-group"><label className="input-label">Estoque Mínimo</label><input className="input" type="number" value={f.minimo} onChange={e => setF(p => ({ ...p, minimo: +e.target.value }))} /></div>
+          </div>
+          <div className="input-group">
+            <label className="input-label">⏱ Periodicidade de Troca (dias)</label>
+            <input className="input" type="number" value={f.periodicidade} onChange={e => setF(p => ({ ...p, periodicidade: +e.target.value }))} placeholder="Ex: 90 = troca a cada 3 meses" />
+            <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 6, fontFamily: "IBM Plex Mono" }}>
+              {f.periodicidade ? `Troca a cada ${f.periodicidade} dias (~${Math.round(f.periodicidade/30)} meses)` : "Defina a frequência de substituição obrigatória"}
+            </div>
+          </div>
+          <div className="input-group"><label className="input-label">Descrição / Especificação</label><textarea className="input" value={f.descricao} onChange={e => setF(p => ({ ...p, descricao: e.target.value }))} /></div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={() => onSave(f)}>💾 Salvar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── EPIS PAGE ────────────────────────────────────────────────────────────────
+function EpisPage({ epis, setEpis, toast }) {
+  const [addModal, setAddModal] = useState(false);
+  const [editEpi, setEditEpi] = useState(null);
+
+  const saveEpi = (f) => {
+    if (f.id) {
+      setEpis(prev => prev.map(e => e.id === f.id ? f : e));
+      toast("EPI atualizado com sucesso!", "success");
+    } else {
+      setEpis(prev => [...prev, { ...f, id: Date.now() }]);
+      toast("EPI cadastrado com sucesso!", "success");
+    }
+    setEditEpi(null);
+    setAddModal(false);
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+        <div style={{ fontSize: 13, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>
+          {epis.filter(e => e.estoque <= e.minimo).length} alertas · clique em um EPI para editar
+        </div>
+        <button className="btn btn-primary" onClick={() => setAddModal(true)}>+ Novo EPI</button>
+      </div>
+      <div className="epi-grid">
+        {epis.map(e => {
+          const pct = Math.min(100, (e.estoque / (e.minimo * 3)) * 100);
+          const low = e.estoque <= e.minimo;
+          const color = low ? "var(--red)" : pct > 60 ? "var(--green)" : "var(--orange)";
+          return (
+            <div key={e.id} className={`epi-card${low ? " low" : ""}`} onClick={() => setEditEpi(e)}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div className="epi-icon">{e.img}</div>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                  {low && <span className="badge badge-red">⚠ Baixo</span>}
+                  <span className="badge badge-gray">✏️ Editar</span>
+                </div>
+              </div>
+              <div className="epi-name">{e.nome}</div>
+              <div className="epi-ca">{e.ca} · {e.categoria}</div>
+              <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4, fontFamily: "IBM Plex Mono" }}>
+                🔄 Troca: a cada {e.periodicidade}d · {e.fabricante}
+              </div>
+              <div className="epi-stock">
+                <span style={{ fontSize: 11, color: "var(--text3)" }}>Estoque</span>
+                <div className="stock-bar-wrap"><div className="stock-bar" style={{ width: pct + "%", background: color }} /></div>
+                <span className="stock-num" style={{ color }}>{e.estoque}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {(editEpi || addModal) && (
+        <EpiModal
+          epi={editEpi || { nome: "", ca: "", categoria: "Proteção da Cabeça", estoque: 0, minimo: 0, validade: "", img: "🪖", periodicidade: 90, descricao: "", norma: "", fabricante: "" }}
+          onClose={() => { setEditEpi(null); setAddModal(false); }}
+          onSave={saveEpi}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── FUNCIONARIOS PAGE ────────────────────────────────────────────────────────
+function FuncionariosPage({ funcionarios, setFuncionarios, toast }) {
+  const [addModal, setAddModal] = useState(false);
+  const [editFunc, setEditFunc] = useState(null);
+
+  const saveFunc = (f) => {
+    if (f.id) {
+      setFuncionarios(prev => prev.map(x => x.id === f.id ? { ...x, ...f } : x));
+      toast("Dados atualizados!", "success");
+    } else {
+      setFuncionarios(prev => [...prev, { ...f, id: Date.now(), biometrias: [] }]);
+      toast("Funcionário cadastrado!", "success");
+    }
+    setEditFunc(null); setAddModal(false);
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+        <div style={{ fontSize: 13, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>
+          {funcionarios.filter(f => f.biometrias.length > 0).length}/{funcionarios.length} com biometria
+        </div>
+        <button className="btn btn-primary" onClick={() => setAddModal(true)}>+ Novo Funcionário</button>
+      </div>
+      <div className="func-grid">
+        {funcionarios.map(f => (
+          <div key={f.id} className="func-card">
+            <div className="func-avatar">{f.nome[0]}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="func-name">{f.nome}</div>
+              <div className="func-info">{f.matricula} · {f.setor}</div>
+              <div className="func-info">{f.cargo}</div>
+              <div className="func-tags">
+                {f.biometrias.length > 0
+                  ? <span className="badge badge-green">👆 {f.biometrias.length} biometria{f.biometrias.length > 1 ? "s" : ""}</span>
+                  : <span className="badge badge-orange">⚠ Sem biometria</span>}
+              </div>
+            </div>
+            <button className="btn btn-ghost btn-xs" onClick={() => setEditFunc(f)} style={{ flexShrink: 0, alignSelf: "flex-start" }}>✏️ Editar</button>
+          </div>
+        ))}
+      </div>
+      {(editFunc || addModal) && (
+        <FuncModal
+          func={editFunc || { nome: "", matricula: "", setor: "Produção", cargo: "", email: "", telefone: "", admissao: "" }}
+          onClose={() => { setEditFunc(null); setAddModal(false); }}
+          onSave={saveFunc}
+        />
+      )}
+    </div>
+  );
+}
+
+function FuncModal({ func, onClose, onSave }) {
+  const [f, setF] = useState({ ...func });
+  const setores = ["Produção","Manutenção","Logística","Qualidade","Segurança","Administrativo","TI","RH"];
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <span className="modal-title">{func.id ? `Editar — ${func.nome.split(" ")[0]}` : "Novo Funcionário"}</span>
+          <button className="close-btn" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body">
+          <div className="input-row">
+            <div className="input-group" style={{ gridColumn: "1 / -1" }}><label className="input-label">Nome Completo</label><input className="input" value={f.nome} onChange={e => setF(p => ({ ...p, nome: e.target.value }))} /></div>
+          </div>
+          <div className="input-row">
+            <div className="input-group"><label className="input-label">Matrícula</label><input className="input" value={f.matricula} onChange={e => setF(p => ({ ...p, matricula: e.target.value }))} /></div>
+            <div className="input-group"><label className="input-label">Data de Admissão</label><input className="input" type="date" value={f.admissao} onChange={e => setF(p => ({ ...p, admissao: e.target.value }))} /></div>
+          </div>
+          <div className="input-row">
+            <div className="input-group"><label className="input-label">Setor</label><select className="input" value={f.setor} onChange={e => setF(p => ({ ...p, setor: e.target.value }))}>{setores.map(s => <option key={s}>{s}</option>)}</select></div>
+            <div className="input-group"><label className="input-label">Cargo</label><input className="input" value={f.cargo} onChange={e => setF(p => ({ ...p, cargo: e.target.value }))} /></div>
+          </div>
+          <div className="input-row">
+            <div className="input-group"><label className="input-label">E-mail</label><input className="input" type="email" value={f.email} onChange={e => setF(p => ({ ...p, email: e.target.value }))} /></div>
+            <div className="input-group"><label className="input-label">Telefone</label><input className="input" value={f.telefone} onChange={e => setF(p => ({ ...p, telefone: e.target.value }))} /></div>
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={() => onSave(f)}>💾 Salvar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── BIOMETRIA PAGE ───────────────────────────────────────────────────────────
+function BiometriaPage({ funcionarios, setFuncionarios, toast }) {
+  const [tab, setTab] = useState("registrar");
+  const [func, setFunc] = useState(funcionarios[0]);
+  const [type, setType] = useState(null);
+  const [scanning, setScanning] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [done, setDone] = useState(false);
+  const [confirm, setConfirm] = useState(null);
+
+  useEffect(() => {
+    const found = funcionarios.find(f => f.id === func?.id);
+    if (found) setFunc(found);
+  }, [funcionarios]);
+
+  const startScan = () => {
+    setScanning(true); setProgress(0);
+    let p = 0;
+    const iv = setInterval(() => {
+      p += Math.random() * 12;
+      if (p >= 100) {
+        clearInterval(iv);
+        setTimeout(() => {
+          setScanning(false);
+          const qualidade = +(90 + Math.random() * 9).toFixed(1);
+          setFuncionarios(prev => prev.map(f => f.id === func.id ? { ...f, biometrias: [...f.biometrias, { tipo: type, data: new Date().toISOString().split("T")[0], qualidade }] } : f));
+          setDone(true);
+          toast(`Biometria ${type === "facial" ? "facial" : "digital"} registrada!`, "success");
+        }, 400);
+      }
+      setProgress(Math.min(100, p));
+    }, 180);
+  };
+
+  const deleteBio = (funcId, bioIdx) => {
+    setFuncionarios(prev => prev.map(f => f.id === funcId ? { ...f, biometrias: f.biometrias.filter((_, i) => i !== bioIdx) } : f));
+    toast("Biometria excluída.", "info");
+    setConfirm(null);
+  };
+
+  if (tab === "gerenciar") return (
+    <div>
+      <div className="tab-bar">
+        <div className="tab" onClick={() => setTab("registrar")}>Registrar</div>
+        <div className="tab active">Gerenciar</div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {funcionarios.map(f => (
+          <div key={f.id} className="card">
+            <div className="card-header">
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <div className="func-avatar" style={{ width: 36, height: 36, fontSize: 14 }}>{f.nome[0]}</div>
+                <div>
+                  <div style={{ fontWeight: 600 }}>{f.nome}</div>
+                  <div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>{f.matricula} · {f.setor}</div>
+                </div>
+              </div>
+              {f.biometrias.length === 0 && <span className="badge badge-gray">Sem biometrias</span>}
+            </div>
+            {f.biometrias.length > 0 && (
+              <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {f.biometrias.map((b, i) => (
+                  <div key={i} className="bio-registered-item">
+                    <div style={{ fontSize: 22 }}>{b.tipo === "facial" ? "👤" : "👆"}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{b.tipo === "facial" ? "Biometria Facial" : "Impressão Digital"}</div>
+                      <div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>Cadastrada em {b.data} · Qualidade: {b.qualidade}%</div>
+                    </div>
+                    <span className="badge badge-green" style={{ marginRight: 8 }}>✓ Ativo</span>
+                    <button className="btn btn-danger btn-xs" onClick={() => setConfirm({ funcId: f.id, bioIdx: i, funcNome: f.nome, tipo: b.tipo })}>🗑 Excluir</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {confirm && (
+        <ConfirmDialog
+          icon="🗑️" title="Excluir Biometria" danger
+          desc={`Excluir a biometria ${confirm.tipo === "facial" ? "facial" : "digital"} de ${confirm.funcNome}? Esta ação não pode ser desfeita.`}
+          confirmLabel="Excluir"
+          onConfirm={() => deleteBio(confirm.funcId, confirm.bioIdx)}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      <div className="tab-bar">
+        <div className="tab active">Registrar</div>
+        <div className="tab" onClick={() => { setDone(false); setType(null); setTab("gerenciar"); }}>Gerenciar / Excluir</div>
+      </div>
+      {done ? (
+        <div>
+          <div className="alert alert-success" style={{ marginBottom: 20 }}>✅ Biometria registrada para <strong>{func.nome}</strong></div>
+          <div className="card"><div className="card-body" style={{ textAlign: "center", padding: 40 }}>
+            <div style={{ fontSize: 60, marginBottom: 16 }}>{type === "facial" ? "👤" : "👆"}</div>
+            <div style={{ fontFamily: "Barlow Condensed", fontSize: 24, fontWeight: 800, color: "var(--green)", marginBottom: 16 }}>BIOMETRIA REGISTRADA</div>
+            <button className="btn btn-primary" onClick={() => { setDone(false); setType(null); setProgress(0); }}>Registrar nova</button>
+          </div></div>
+        </div>
+      ) : (
+        <div>
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header"><span className="card-title">Funcionário</span></div>
+            <div className="card-body">
+              <select className="input" value={func?.id} onChange={e => { setFunc(funcionarios.find(f => f.id === +e.target.value)); setType(null); setDone(false); }}>
+                {funcionarios.map(f => <option key={f.id} value={f.id}>{f.nome} — {f.matricula}</option>)}
+              </select>
+              {func && func.biometrias.length > 0 && (
+                <div style={{ marginTop: 10, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {func.biometrias.map((b, i) => <span key={i} className="badge badge-green">{b.tipo === "facial" ? "👤 Facial" : "👆 Digital"} registrada</span>)}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="bio-panel">
+            {[{ t: "facial", icon: "👤", title: "Biometria Facial", desc: "Captura 128 pontos de referência do rosto" }, { t: "digital", icon: "👆", title: "Impressão Digital", desc: "Leitura via sensor biométrico (ZFM-20 / Suprema)" }].map(o => (
+              <div key={o.t} className={`bio-option${type === o.t ? " active" : ""}`} onClick={() => setType(o.t)}>
+                <div className="bio-option-icon">{o.icon}</div>
+                <div><div className="bio-option-title">{o.title}</div><div className="bio-option-desc">{o.desc}</div></div>
+                <div style={{ marginLeft: "auto" }}>{type === o.t ? <span style={{ color: "var(--orange)", fontSize: 20 }}>●</span> : <span style={{ color: "var(--border2)", fontSize: 20 }}>○</span>}</div>
+              </div>
+            ))}
+          </div>
+          {type === "facial" && (
+            <div className="face-capture" style={{ height: 200, marginTop: 16, borderRadius: 10 }}>
+              <div className="face-guide" />
+              {scanning && <div className="scan-line" />}
+              {!scanning && <div style={{ textAlign: "center", zIndex: 2 }}><div style={{ fontSize: 32 }}>📷</div><div style={{ fontSize: 11, color: "var(--text3)" }}>Câmera simulada</div></div>}
+            </div>
+          )}
+          {type === "digital" && (
+            <div style={{ textAlign: "center", marginTop: 16 }}>
+              <div style={{ display: "inline-flex", width: 120, height: 120, background: "var(--surface2)", border: `1px solid ${scanning ? "var(--orange)" : "var(--border)"}`, borderRadius: 12, alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
+                <div style={{ fontSize: 44 }}>🫸</div>
+                <div style={{ fontSize: 10, fontFamily: "IBM Plex Mono", color: "var(--text3)" }}>{scanning ? "LENDO..." : "SENSOR"}</div>
+              </div>
+            </div>
+          )}
+          {scanning && (
+            <div className="confidence-meter" style={{ marginTop: 16 }}>
+              <div className="confidence-label"><span>Processando...</span><span>{progress.toFixed(0)}%</span></div>
+              <div className="confidence-bar"><div className="confidence-fill" style={{ width: progress + "%", background: "var(--orange)" }} /></div>
+            </div>
+          )}
+          <button className="btn btn-primary" style={{ marginTop: 16 }} disabled={!type || scanning} onClick={startScan}>
+            {scanning ? "⏳ Processando..." : "Iniciar Captura"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ENTREGAS PAGE ────────────────────────────────────────────────────────────
+function SignModal({ entrega, onClose, onSign }) {
+  const [sigType, setSigType] = useState(null);
+  const [signing, setSigning] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const canvasRef = useRef(null);
+  const drawing = useRef(false);
+  const [hasSig, setHasSig] = useState(false);
+
+  const startSign = () => {
+    if (!sigType) return;
+    if (sigType === "manual" && !hasSig) return;
+    setSigning(true); setProgress(0);
+    let p = 0;
+    const iv = setInterval(() => {
+      p += Math.random() * 15;
+      if (p >= 100) { clearInterval(iv); setTimeout(() => onSign(sigType), 400); }
+      else setProgress(p);
+    }, 150);
+  };
+  const startDraw = (e) => {
+    drawing.current = true;
+    const c = canvasRef.current, r = c.getBoundingClientRect(), cx = c.getContext("2d");
+    cx.beginPath(); cx.moveTo(e.clientX - r.left, e.clientY - r.top);
+  };
+  const draw = (e) => {
+    if (!drawing.current) return;
+    const c = canvasRef.current, r = c.getBoundingClientRect(), cx = c.getContext("2d");
+    cx.lineTo(e.clientX - r.left, e.clientY - r.top); cx.strokeStyle = "#1a1a2e"; cx.lineWidth = 2; cx.lineCap = "round"; cx.stroke(); setHasSig(true);
+  };
+  const stopDraw = () => { drawing.current = false; };
+  const clearSig = () => { canvasRef.current?.getContext("2d").clearRect(0, 0, 460, 120); setHasSig(false); };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header"><span className="modal-title">Assinar Entrega #{String(entrega.id).padStart(4,"0")}</span><button className="close-btn" onClick={onClose}>×</button></div>
+        <div className="modal-body">
+          <div className="alert alert-info" style={{ marginBottom: 16, fontSize: 12 }}>
+            Funcionário: <strong>{entrega.funcionario}</strong> · {entrega.itens.length} item(ns)
+          </div>
+          <div className="bio-panel">
+            {[{ t: "facial", icon: "👤", title: "Facial", desc: "Reconhecimento facial" }, { t: "digital", icon: "👆", title: "Digital", desc: "Impressão digital" }, { t: "manual", icon: "✍️", title: "Manual", desc: "Assinatura na tela" }].map(o => (
+              <div key={o.t} className={`bio-option${sigType === o.t ? " active" : ""}`} onClick={() => setSigType(o.t)}>
+                <div className="bio-option-icon">{o.icon}</div>
+                <div><div className="bio-option-title">{o.title}</div><div className="bio-option-desc">{o.desc}</div></div>
+              </div>
+            ))}
+          </div>
+          {sigType === "facial" && (
+            <div className="face-capture" style={{ height: 160, marginTop: 16, borderRadius: 10 }}>
+              <div className="face-guide" />{signing && <div className="scan-line" />}
+              {!signing && <div style={{ textAlign: "center", zIndex: 2 }}><div style={{ fontSize: 28 }}>📷</div><div style={{ fontSize: 11, color: "var(--text3)" }}>Câmera simulada</div></div>}
+            </div>
+          )}
+          {sigType === "manual" && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 6 }}>Assine abaixo:</div>
+              <canvas ref={canvasRef} className="sig-canvas" width={480} height={110} style={{ width: "100%", display: "block" }} onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw} />
+              <button className="btn btn-ghost btn-sm" style={{ marginTop: 6 }} onClick={clearSig}>Limpar</button>
+            </div>
+          )}
+          {signing && (
+            <div className="confidence-meter" style={{ marginTop: 14 }}>
+              <div className="confidence-label"><span>Verificando...</span><span>{progress.toFixed(0)}%</span></div>
+              <div className="confidence-bar"><div className="confidence-fill" style={{ width: progress + "%", background: "var(--orange)" }} /></div>
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" disabled={!sigType || signing || (sigType === "manual" && !hasSig)} onClick={startSign}>
+            {signing ? "⏳ Verificando..." : "✅ Assinar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EntregasPage({ entregas, setEntregas, toast }) {
+  const [filter, setFilter] = useState("todos");
+  const [signModal, setSignModal] = useState(null);
+  const [cancelConfirm, setCancelConfirm] = useState(null);
+
+  const filtered = filter === "todos" ? entregas : entregas.filter(e => e.status === filter);
+
+  const doSign = (id, tipo) => {
+    const confianca = tipo === "facial" ? +(88 + Math.random() * 10).toFixed(1) : tipo === "digital" ? +(92 + Math.random() * 7).toFixed(1) : null;
+    setEntregas(prev => prev.map(e => e.id === id ? { ...e, status: "assinado", tipo_assinatura: tipo, confianca } : e));
+    setSignModal(null);
+    toast("Entrega assinada com sucesso!", "success");
+  };
+
+  const doCancel = (id) => {
+    setEntregas(prev => prev.map(e => e.id === id ? { ...e, status: "cancelado" } : e));
+    setCancelConfirm(null);
+    toast("Entrega cancelada.", "info");
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+        {[["todos","Todos"],["assinado","Assinados"],["pendente_assinatura","Pendentes"],["cancelado","Cancelados"]].map(([v,l]) => (
+          <button key={v} className={`btn ${filter === v ? "btn-primary" : "btn-ghost"} btn-sm`} onClick={() => setFilter(v)}>{l}</button>
+        ))}
+      </div>
+      <div className="card">
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Funcionário</th><th>Data</th><th>Itens</th><th>Status</th><th>Assinatura</th><th>Ações</th></tr></thead>
+            <tbody>
+              {filtered.map(e => (
+                <tr key={e.id}>
+                  <td><span style={{ fontFamily: "IBM Plex Mono", color: "var(--text3)", fontSize: 12 }}>#{String(e.id).padStart(4,"0")}</span></td>
+                  <td><span style={{ fontWeight: 600 }}>{e.funcionario.split(" ").slice(0,2).join(" ")}</span></td>
+                  <td><span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text3)" }}>{e.data}</span></td>
+                  <td><span className="badge badge-gray">{e.itens.length} item{e.itens.length !== 1 ? "s" : ""}</span></td>
+                  <td>
+                    {e.status === "assinado" && <span className="badge badge-green">✓ Assinado</span>}
+                    {e.status === "pendente_assinatura" && <span className="badge badge-orange">⏳ Pendente</span>}
+                    {e.status === "cancelado" && <span className="badge badge-gray">✕ Cancelado</span>}
+                  </td>
+                  <td>
+                    {e.tipo_assinatura === "facial" && <span className="badge badge-blue">👤 {e.confianca}%</span>}
+                    {e.tipo_assinatura === "digital" && <span className="badge badge-blue">👆 {e.confianca}%</span>}
+                    {e.tipo_assinatura === "manual" && <span className="badge badge-gray">✍️ Manual</span>}
+                    {!e.tipo_assinatura && <span style={{ color: "var(--text3)", fontSize: 12 }}>—</span>}
+                  </td>
+                  <td>
+                    <div className="action-btns">
+                      {e.status === "pendente_assinatura" && (
+                        <>
+                          <button className="btn btn-success btn-xs" onClick={() => setSignModal(e)}>✍️ Assinar</button>
+                          <button className="btn btn-danger btn-xs" onClick={() => setCancelConfirm(e)}>✕ Cancelar</button>
+                        </>
+                      )}
+                      {e.status === "assinado" && <span style={{ fontSize: 11, color: "var(--text3)" }}>—</span>}
+                      {e.status === "cancelado" && <span style={{ fontSize: 11, color: "var(--text3)" }}>—</span>}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {signModal && <SignModal entrega={signModal} onClose={() => setSignModal(null)} onSign={(tipo) => doSign(signModal.id, tipo)} />}
+      {cancelConfirm && (
+        <ConfirmDialog icon="🚫" title="Cancelar Entrega" danger
+          desc={`Cancelar a entrega #${String(cancelConfirm.id).padStart(4,"0")} de ${cancelConfirm.funcionario.split(" ")[0]}? Esta ação não pode ser desfeita.`}
+          confirmLabel="Cancelar Entrega"
+          onConfirm={() => doCancel(cancelConfirm.id)}
+          onCancel={() => setCancelConfirm(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── CANCELAR ENTREGA (OPERAÇÕES) ─────────────────────────────────────────────
+function CancelarEntregaPage({ entregas, setEntregas, toast }) {
+  const pendentes = entregas.filter(e => e.status === "pendente_assinatura");
+  const assinadas = entregas.filter(e => e.status === "assinado");
+  const [confirm, setConfirm] = useState(null);
+  const [motivo, setMotivo] = useState("");
+  const [tab, setTab] = useState("pendentes");
+
+  const doCancel = (id) => {
+    setEntregas(prev => prev.map(e => e.id === id ? { ...e, status: "cancelado", motivo_cancelamento: motivo || "Cancelado pelo operador" } : e));
+    setConfirm(null); setMotivo("");
+    toast("Entrega cancelada com sucesso.", "info");
+  };
+
+  const lista = tab === "pendentes" ? pendentes : assinadas;
+
+  return (
+    <div>
+      <div className="alert alert-warning" style={{ marginBottom: 20 }}>
+        ⚠️ O cancelamento é irreversível. Use com cautela para entregas com erro de lançamento ou devoluções de EPI.
+      </div>
+      <div className="tab-bar">
+        <div className={`tab${tab === "pendentes" ? " active" : ""}`} onClick={() => setTab("pendentes")}>Pendentes ({pendentes.length})</div>
+        <div className={`tab${tab === "assinadas" ? " active" : ""}`} onClick={() => setTab("assinadas")}>Assinadas ({assinadas.length})</div>
+      </div>
+      {lista.length === 0 ? (
+        <div className="empty-state"><div className="empty-icon">{tab === "pendentes" ? "✅" : "📋"}</div>Nenhuma entrega {tab === "pendentes" ? "pendente" : "assinada"}</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {lista.map(e => (
+            <div key={e.id} className="card">
+              <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                    <span style={{ fontFamily: "IBM Plex Mono", color: "var(--text3)", fontSize: 11, marginRight: 8 }}>#{String(e.id).padStart(4,"0")}</span>
+                    {e.funcionario}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>{e.data}</span>
+                    <span className="badge badge-gray">{e.itens.length} item{e.itens.length !== 1 ? "s" : ""}</span>
+                    {e.status === "assinado" && <span className="badge badge-green">✓ Assinado</span>}
+                    {e.status === "pendente_assinatura" && <span className="badge badge-orange">⏳ Pendente</span>}
+                  </div>
+                  <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                    {e.itens.map((item, i) => <span key={i} style={{ fontSize: 13 }} title={item.nome}>{item.img}</span>)}
+                  </div>
+                </div>
+                <button className="btn btn-danger btn-sm" onClick={() => setConfirm(e)}>🚫 Cancelar Entrega</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {confirm && (
+        <div className="modal-overlay" onClick={() => setConfirm(null)}>
+          <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header"><span className="modal-title">🚫 Cancelar Entrega #{String(confirm.id).padStart(4,"0")}</span><button className="close-btn" onClick={() => setConfirm(null)}>×</button></div>
+            <div className="modal-body">
+              <div className="alert alert-error" style={{ marginBottom: 16 }}>Esta ação é irreversível e ficará registrada no histórico.</div>
+              <div className="input-group">
+                <label className="input-label">Motivo do cancelamento (opcional)</label>
+                <textarea className="input" value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ex: Erro de lançamento, devolução de EPI, etc." />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setConfirm(null)}>Voltar</button>
+              <button className="btn btn-danger" onClick={() => doCancel(confirm.id)}>🚫 Confirmar Cancelamento</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── NOVA ENTREGA ─────────────────────────────────────────────────────────────
+function NovaEntregaPage({ epis, funcionarios, entregas, setEntregas, toast, onNav }) {
+  const [step, setStep] = useState(0);
+  const [func, setFunc] = useState(null);
+  const [selected, setSelected] = useState([]);
+  const [qtds, setQtds] = useState({});
+  const [sigType, setSigType] = useState(null);
+  const [signing, setSigning] = useState(false);
+  const [sigProgress, setSigProgress] = useState(0);
+  const [done, setDone] = useState(false);
+  const [newId] = useState(Date.now());
+  const canvasRef = useRef(null);
+  const drawing = useRef(false);
+  const [hasSig, setHasSig] = useState(false);
+
+  const steps = ["Funcionário","Itens","Confirmar","Assinar","Recibo"];
+
+  const toggleEpi = (id) => {
+    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    setQtds(prev => ({ ...prev, [id]: prev[id] || 1 }));
+  };
+
+  const startSign = () => {
+    if (!sigType || (sigType === "manual" && !hasSig)) return;
+    setSigning(true); setSigProgress(0);
+    let p = 0;
+    const iv = setInterval(() => {
+      p += Math.random() * 15;
+      if (p >= 100) {
+        clearInterval(iv); setSigProgress(100);
+        setTimeout(() => {
+          const confianca = sigType === "facial" ? +(88 + Math.random() * 10).toFixed(1) : sigType === "digital" ? +(92 + Math.random() * 7).toFixed(1) : null;
+          const itens = epis.filter(e => selected.includes(e.id)).map(e => ({ epi_id: e.id, nome: e.nome, img: e.img, qtd: qtds[e.id] || 1 }));
+          setEntregas(prev => [{ id: newId, funcionario_id: func.id, funcionario: func.nome, data: new Date().toISOString().split("T")[0], itens, status: "assinado", tipo_assinatura: sigType, confianca }, ...prev]);
+          setSigning(false); setDone(true); setStep(4);
+          toast("Entrega registrada e assinada!", "success");
+        }, 500);
+      } else setSigProgress(p);
+    }, 150);
+  };
+
+  const startDraw = (e) => {
+    drawing.current = true;
+    const c = canvasRef.current, r = c.getBoundingClientRect(), cx = c.getContext("2d");
+    cx.beginPath(); cx.moveTo(e.clientX - r.left, e.clientY - r.top);
+  };
+  const draw = (e) => {
+    if (!drawing.current) return;
+    const c = canvasRef.current, r = c.getBoundingClientRect(), cx = c.getContext("2d");
+    cx.lineTo(e.clientX - r.left, e.clientY - r.top); cx.strokeStyle = "#1a1a2e"; cx.lineWidth = 2; cx.lineCap = "round"; cx.stroke(); setHasSig(true);
+  };
+  const clearSig = () => { canvasRef.current?.getContext("2d").clearRect(0, 0, 460, 120); setHasSig(false); };
+
+  const selEpis = epis.filter(e => selected.includes(e.id));
+
+  if (done) return (
+    <div>
+      <div className="alert alert-success" style={{ marginBottom: 20 }}>✅ Entrega registrada e assinada com sucesso!</div>
+      <div className="card">
+        <div className="card-header" style={{ background: "var(--surface2)" }}>
+          <div><div style={{ fontFamily: "Barlow Condensed", fontSize: 20, fontWeight: 800 }}>FICHA DE ENTREGA DE EPI</div><div style={{ fontSize: 11, fontFamily: "IBM Plex Mono", color: "var(--text3)" }}>#{String(newId).slice(-6)} · {new Date().toLocaleDateString("pt-BR")}</div></div>
+          <span className="badge badge-green" style={{ fontSize: 13 }}>✓ ASSINADO</span>
+        </div>
+        <div className="card-body">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+            <div><div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginBottom: 4 }}>FUNCIONÁRIO</div><div style={{ fontWeight: 600 }}>{func?.nome}</div><div style={{ fontSize: 12, color: "var(--text3)" }}>{func?.matricula} · {func?.setor}</div></div>
+            <div><div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginBottom: 4 }}>ASSINATURA</div><div style={{ fontWeight: 600 }}>{sigType === "facial" ? "👤 Facial" : sigType === "digital" ? "👆 Digital" : "✍️ Manual"}</div></div>
+          </div>
+          <table><thead><tr><th>EPI</th><th>CA</th><th>Qtd</th><th>Próxima Troca</th></tr></thead>
+            <tbody>{selEpis.map(e => (<tr key={e.id}><td><span style={{ marginRight: 6 }}>{e.img}</span>{e.nome}</td><td><span className="tag">{e.ca}</span></td><td>{qtds[e.id] || 1} un</td><td style={{ fontFamily: "IBM Plex Mono", fontSize: 11, color: "var(--orange)" }}>{fmtDate(addDays(new Date().toISOString().split("T")[0], e.periodicidade))}</td></tr>))}</tbody>
+          </table>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+        <button className="btn btn-primary" onClick={() => { setStep(0); setFunc(null); setSelected([]); setSigType(null); setDone(false); setHasSig(false); }}>Nova Entrega</button>
+        <button className="btn btn-ghost" onClick={() => onNav("entregas")}>Ver Histórico</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div className="steps">{steps.map((s, i) => (<div key={i} className={`step${i === step ? " active" : i < step ? " done" : ""}`}><div className="step-circle">{i < step ? "✓" : i + 1}</div><div className="step-label">{s}</div></div>))}</div>
+
+      {step === 0 && (
+        <div className="card">
+          <div className="card-header"><span className="card-title">Selecionar Funcionário</span></div>
+          <div className="card-body">
+            <div className="func-grid">
+              {funcionarios.map(f => (
+                <div key={f.id} className="func-card" style={{ cursor: "pointer", border: func?.id === f.id ? "1px solid var(--orange)" : undefined, background: func?.id === f.id ? "var(--orange-dim)" : undefined }} onClick={() => setFunc(f)}>
+                  <div className="func-avatar">{f.nome[0]}</div>
+                  <div><div className="func-name">{f.nome}</div><div className="func-info">{f.matricula} · {f.cargo}</div>{func?.id === f.id && <span className="badge badge-orange" style={{ marginTop: 4 }}>Selecionado</span>}</div>
+                </div>
+              ))}
+            </div>
+            <button className="btn btn-primary" style={{ marginTop: 16 }} disabled={!func} onClick={() => setStep(1)}>Próximo →</button>
+          </div>
+        </div>
+      )}
+
+      {step === 1 && (
+        <div>
+          <div className="epi-grid">
+            {epis.map(e => {
+              const sel = selected.includes(e.id);
+              return (
+                <div key={e.id} className="epi-card" style={{ border: sel ? "1px solid var(--orange)" : undefined, background: sel ? "var(--orange-dim)" : undefined }} onClick={() => toggleEpi(e.id)}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><div className="epi-icon">{e.img}</div>{sel && <span className="badge badge-orange">✓</span>}</div>
+                  <div className="epi-name">{e.nome}</div>
+                  <div className="epi-ca">{e.ca}</div>
+                  <div style={{ fontSize: 11, color: "var(--orange)", marginTop: 4, fontFamily: "IBM Plex Mono" }}>🔄 Troca: {e.periodicidade}d</div>
+                  {sel && (<div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }} onClick={ev => ev.stopPropagation()}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setQtds(p => ({ ...p, [e.id]: Math.max(1, (p[e.id]||1)-1) }))}>−</button>
+                    <span style={{ fontFamily: "IBM Plex Mono", fontWeight: 700 }}>{qtds[e.id]||1}</span>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setQtds(p => ({ ...p, [e.id]: (p[e.id]||1)+1 }))}>+</button>
+                  </div>)}
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+            <button className="btn btn-ghost" onClick={() => setStep(0)}>← Voltar</button>
+            <button className="btn btn-primary" disabled={selected.length === 0} onClick={() => setStep(2)}>Próximo ({selected.length}) →</button>
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="card">
+          <div className="card-header"><span className="card-title">Confirmação</span></div>
+          <div className="card-body">
+            <table><thead><tr><th>EPI</th><th>CA</th><th>Qtd</th><th>Próx. Troca</th></tr></thead>
+              <tbody>{selEpis.map(e => (<tr key={e.id}><td><span style={{ marginRight: 6 }}>{e.img}</span>{e.nome}</td><td><span className="tag">{e.ca}</span></td><td>{qtds[e.id]||1} un</td><td style={{ fontFamily: "IBM Plex Mono", fontSize: 11, color: "var(--orange)" }}>{fmtDate(addDays(new Date().toISOString().split("T")[0], e.periodicidade))}</td></tr>))}</tbody>
+            </table>
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-ghost" onClick={() => setStep(1)}>← Editar</button>
+            <button className="btn btn-primary" onClick={() => setStep(3)}>Confirmar →</button>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="card">
+          <div className="card-header"><span className="card-title">Assinatura Biométrica</span></div>
+          <div className="card-body">
+            <div className="bio-panel">
+              {[{ t: "facial", icon: "👤", title: "Facial", desc: "Embedding 128D" }, { t: "digital", icon: "👆", title: "Digital", desc: "Template biométrico" }, { t: "manual", icon: "✍️", title: "Manual", desc: "Assinatura digitalizada" }].map(o => (
+                <div key={o.t} className={`bio-option${sigType === o.t ? " active" : ""}`} onClick={() => setSigType(o.t)}>
+                  <div className="bio-option-icon">{o.icon}</div>
+                  <div><div className="bio-option-title">{o.title}</div><div className="bio-option-desc">{o.desc}</div></div>
+                </div>
+              ))}
+            </div>
+            {sigType === "facial" && (<div className="face-capture" style={{ height: 160, marginTop: 16, borderRadius: 10 }}><div className="face-guide" />{signing && <div className="scan-line" />}{!signing && <div style={{ textAlign: "center", zIndex: 2 }}><div style={{ fontSize: 28 }}>📷</div></div>}</div>)}
+            {sigType === "manual" && (<div style={{ marginTop: 14 }}><div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 6 }}>Assine abaixo:</div><canvas ref={canvasRef} className="sig-canvas" width={480} height={110} style={{ width: "100%", display: "block" }} onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw} /><button className="btn btn-ghost btn-sm" style={{ marginTop: 6 }} onClick={clearSig}>Limpar</button></div>)}
+            {signing && (<div className="confidence-meter" style={{ marginTop: 14 }}><div className="confidence-label"><span>Verificando...</span><span>{sigProgress.toFixed(0)}%</span></div><div className="confidence-bar"><div className="confidence-fill" style={{ width: sigProgress + "%", background: "var(--orange)" }} /></div></div>)}
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-ghost" onClick={() => setStep(2)}>← Voltar</button>
+            <button className="btn btn-primary" disabled={!sigType || signing || (sigType === "manual" && !hasSig)} onClick={startSign}>{signing ? "⏳ Verificando..." : "✅ Assinar"}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── RELATÓRIO DE TROCAS ──────────────────────────────────────────────────────
+function RelatorioTrocaPage({ epis, funcionarios, entregas }) {
+  const [filtroUrgencia, setFiltroUrgencia] = useState("todos");
+  const [filtroFunc, setFiltroFunc] = useState("todos");
+
+  // Build replacement schedule from signed deliveries
+  const trocas = [];
+  entregas.filter(e => e.status === "assinado").forEach(entrega => {
+    const func = funcionarios.find(f => f.id === entrega.funcionario_id);
+    if (!func) return;
+    entrega.itens.forEach(item => {
+      const epi = epis.find(e => e.id === item.epi_id);
+      if (!epi || !epi.periodicidade) return;
+      const dataTroca = addDays(entrega.data, epi.periodicidade);
+      const dias = daysUntil(dataTroca);
+      trocas.push({
+        func, epi, entrega,
+        dataEntrega: entrega.data,
+        dataTroca,
+        diasRestantes: dias,
+        urgencia: dias < 0 ? "atrasado" : dias <= 30 ? "critico" : dias <= 90 ? "proximo" : "ok",
+      });
+    });
+  });
+
+  // Sort by days remaining
+  trocas.sort((a, b) => a.diasRestantes - b.diasRestantes);
+
+  const filtrados = trocas.filter(t => {
+    if (filtroUrgencia !== "todos" && t.urgencia !== filtroUrgencia) return false;
+    if (filtroFunc !== "todos" && t.func.id !== +filtroFunc) return false;
+    return true;
+  });
+
+  const counts = { atrasado: trocas.filter(t => t.urgencia === "atrasado").length, critico: trocas.filter(t => t.urgencia === "critico").length, proximo: trocas.filter(t => t.urgencia === "proximo").length, ok: trocas.filter(t => t.urgencia === "ok").length };
+
+  const urgLabel = { atrasado: "🔴 Atrasado", critico: "🟠 Crítico (≤30d)", proximo: "🟡 Próximo (≤90d)", ok: "🟢 Em dia" };
+  const urgClass = { atrasado: "badge-red", critico: "badge-orange", proximo: "badge-orange", ok: "badge-green" };
+
+  return (
+    <div>
+      <div className="stats-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 20 }}>
+        {[
+          { label: "Atrasados", value: counts.atrasado, color: "red", icon: "🔴" },
+          { label: "Críticos (≤30d)", value: counts.critico, color: "orange", icon: "🟠" },
+          { label: "Próximos (≤90d)", value: counts.proximo, color: "orange", icon: "🟡" },
+          { label: "Em dia", value: counts.ok, color: "green", icon: "🟢" },
+        ].map((s, i) => (
+          <div key={i} className={`stat-card ${s.color}`} style={{ cursor: "pointer", outline: filtroUrgencia === (i === 0 ? "atrasado" : i === 1 ? "critico" : i === 2 ? "proximo" : "ok") ? "2px solid var(--orange)" : "none" }}
+            onClick={() => setFiltroUrgencia(filtroUrgencia === (i === 0 ? "atrasado" : i === 1 ? "critico" : i === 2 ? "proximo" : "ok") ? "todos" : (i === 0 ? "atrasado" : i === 1 ? "critico" : i === 2 ? "proximo" : "ok"))}>
+            <div className="stat-icon">{s.icon}</div>
+            <div className="stat-value">{s.value}</div>
+            <div className="stat-label">{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <span className="card-title">🔄 Calendário de Trocas de EPI</span>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <select className="input" style={{ width: "auto", padding: "5px 10px", fontSize: 12 }} value={filtroFunc} onChange={e => setFiltroFunc(e.target.value)}>
+              <option value="todos">Todos funcionários</option>
+              {funcionarios.map(f => <option key={f.id} value={f.id}>{f.nome.split(" ")[0]} {f.nome.split(" ")[1]}</option>)}
+            </select>
+            <select className="input" style={{ width: "auto", padding: "5px 10px", fontSize: 12 }} value={filtroUrgencia} onChange={e => setFiltroUrgencia(e.target.value)}>
+              <option value="todos">Todos status</option>
+              <option value="atrasado">🔴 Atrasados</option>
+              <option value="critico">🟠 Críticos</option>
+              <option value="proximo">🟡 Próximos</option>
+              <option value="ok">🟢 Em dia</option>
+            </select>
+          </div>
+        </div>
+        <div className="table-wrap">
+          {filtrados.length === 0 ? (
+            <div className="empty-state"><div className="empty-icon">📋</div>Nenhum registro encontrado</div>
+          ) : (
+            <table>
+              <thead>
+                <tr><th>Funcionário</th><th>EPI</th><th>Periodicidade</th><th>Última Entrega</th><th>Próxima Troca</th><th>Dias Restantes</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {filtrados.map((t, i) => (
+                  <tr key={i}>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{t.func.nome.split(" ").slice(0,2).join(" ")}</div>
+                      <div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>{t.func.matricula} · {t.func.setor}</div>
+                    </td>
+                    <td>
+                      <span style={{ marginRight: 6 }}>{t.epi.img}</span>
+                      <span style={{ fontWeight: 500 }}>{t.epi.nome}</span>
+                      <div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>{t.epi.ca}</div>
+                    </td>
+                    <td>
+                      <span style={{ fontFamily: "IBM Plex Mono", fontSize: 12 }}>
+                        {t.epi.periodicidade}d
+                      </span>
+                      <div style={{ fontSize: 11, color: "var(--text3)" }}>
+                        (~{Math.round(t.epi.periodicidade / 30)} meses)
+                      </div>
+                    </td>
+                    <td><span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text3)" }}>{t.dataEntrega}</span></td>
+                    <td><span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, fontWeight: 600 }}>{fmtDate(t.dataTroca)}</span></td>
+                    <td>
+                      <span style={{ fontFamily: "IBM Plex Mono", fontSize: 13, fontWeight: 700 }}
+                        className={t.diasRestantes < 0 ? "urgency-critical" : t.diasRestantes <= 30 ? "urgency-warning" : "urgency-ok"}>
+                        {t.diasRestantes < 0 ? `${Math.abs(t.diasRestantes)}d atrasado` : `${t.diasRestantes}d`}
+                      </span>
+                    </td>
+                    <td><span className={`badge ${urgClass[t.urgencia]}`}>{urgLabel[t.urgencia]}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── RELATORIOS ───────────────────────────────────────────────────────────────
+function RelatoriosPage({ epis, entregas }) {
+  const total = entregas.length;
+  const assinados = entregas.filter(e => e.status === "assinado").length;
+  const facial = entregas.filter(e => e.tipo_assinatura === "facial").length;
+  const digital = entregas.filter(e => e.tipo_assinatura === "digital").length;
+  const manual = entregas.filter(e => e.tipo_assinatura === "manual").length;
+  const pct = (v) => total ? ((v / total) * 100).toFixed(0) : 0;
+
+  return (
+    <div>
+      <div className="stats-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        {[
+          { label: "Taxa de Conformidade", value: pct(assinados) + "%", color: "green", icon: "✅" },
+          { label: "Confiança Média Biométrica", value: "95.4%", color: "orange", icon: "📊" },
+          { label: "Total de Entregas", value: total, color: "blue", icon: "📋" },
+        ].map((s, i) => (<div key={i} className={`stat-card ${s.color}`}><div className="stat-icon">{s.icon}</div><div className="stat-value">{s.value}</div><div className="stat-label">{s.label}</div></div>))}
+      </div>
+      <div className="two-col" style={{ marginTop: 16 }}>
+        <div className="card">
+          <div className="card-header"><span className="card-title">Tipos de Assinatura</span></div>
+          <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {[{ label: "Facial", icon: "👤", value: facial, color: "var(--blue)" }, { label: "Digital", icon: "👆", value: digital, color: "var(--orange)" }, { label: "Manual", icon: "✍️", value: manual, color: "var(--text2)" }].map(item => (
+              <div key={item.label}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 13 }}><span>{item.icon} {item.label}</span><span style={{ fontFamily: "IBM Plex Mono", fontWeight: 700 }}>{item.value} ({pct(item.value)}%)</span></div>
+                <div className="confidence-bar"><div className="confidence-fill" style={{ width: pct(item.value) + "%", background: item.color }} /></div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-header"><span className="card-title">Estoque de EPIs</span></div>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>EPI</th><th>Estoque</th><th>Status</th></tr></thead>
+              <tbody>{epis.map(e => (<tr key={e.id}><td><span style={{ marginRight: 6 }}>{e.img}</span>{e.nome.split(" ").slice(0,2).join(" ")}</td><td><span style={{ fontFamily: "IBM Plex Mono", fontWeight: 700 }}>{e.estoque}</span><span style={{ color: "var(--text3)", fontSize: 11 }}>/{e.minimo}</span></td><td>{e.estoque <= e.minimo ? <span className="badge badge-red">⚠ Crítico</span> : <span className="badge badge-green">✓ OK</span>}</td></tr>))}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── APP SHELL ────────────────────────────────────────────────────────────────
+const NAV = [
+  { id: "dashboard", icon: "⬛", label: "Dashboard", section: "PRINCIPAL" },
+  { id: "nova-entrega", icon: "📋", label: "Nova Entrega", section: "OPERAÇÕES" },
+  { id: "cancelar-entrega", icon: "🚫", label: "Cancelar Entrega" },
+  { id: "entregas", icon: "📦", label: "Histórico de Entregas" },
+  { id: "funcionarios", icon: "👷", label: "Funcionários", section: "CADASTROS" },
+  { id: "epis", icon: "🦺", label: "EPIs" },
+  { id: "biometria", icon: "👆", label: "Biometria" },
+  { id: "relatorio-troca", icon: "🔄", label: "Relatório de Trocas", section: "RELATÓRIOS" },
+  { id: "relatorios", icon: "📊", label: "Indicadores Gerais" },
+];
+const TITLES = {
+  dashboard: ["Dashboard","Visão geral do sistema"],
+  "nova-entrega": ["Nova Entrega","Registrar entrega de EPI"],
+  "cancelar-entrega": ["Cancelar Entrega","Estorno e cancelamento de entregas"],
+  entregas: ["Histórico de Entregas","Registros, assinaturas e ações pendentes"],
+  funcionarios: ["Funcionários","Cadastro e edição"],
+  epis: ["EPIs","Catálogo, estoque e edição"],
+  biometria: ["Biometria","Cadastro e gerenciamento"],
+  "relatorio-troca": ["Relatório de Trocas","Calendário de substituição de EPIs por colaborador"],
+  relatorios: ["Indicadores Gerais","Performance e conformidade"],
+};
+
+interface Entrega {
+  id?: number;
+  cliente_nome: string;
+  endereco: string;
+  status?: string;
+}
+
+export default function App() {
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [page, setPage] = useState("dashboard");
+  const [epis, setEpis] = useState(INIT_EPIS);
+  const [funcionarios, setFuncionarios] = useState(INIT_FUNCIONARIOS);
+  const [entregas, setEntregas] = useState(INIT_ENTREGAS);
+  const { toasts, add: toast } = useToast();
+
+  // INTEGRAÇÃO COM O BACKEND: Busca os dados reais quando o login é feito
+  useEffect(() => {
+    if (!loggedIn) return;
+
+    const carregarDadosDoBackend = async () => {
+      try {
+        // Busca entregas reais
+        //const resEntregas = await fetch('http://localhost:3000/api/entregas');
+        const resEntregas = await fetch('/api/entregas');
+        if (resEntregas.ok) {
+          const dadosEntregas = await resEntregas.json();
+          // Se o banco retornar dados reais, substitui os dados de exemplo
+          if (dadosEntregas && dadosEntregas.length > 0) {
+            // Atualiza a tela com os dados do banco de dados (SQLite)
+            setEntregas(dadosEntregas);
+            console.log("Entregas carregadas do banco:", dadosEntregas);
+          }
+        }
+
+        // Busca funcionários reais
+        const resFuncs = await fetch('/api/funcionarios');
+        if (resFuncs.ok) {
+          const dadosFuncs = await resFuncs.json();
+          if (dadosFuncs && dadosFuncs.length > 0) {
+            setFuncionarios(dadosFuncs);
+            console.log("Funcionários carregados do banco:", dadosFuncs);
+          }
+        }
+
+        // Futuramente você pode adicionar:
+        // const resEpis = await fetch('http://localhost:3000/api/epis');
+        // const resFuncs = await fetch('http://localhost:3000/api/funcionarios');
+
+      } catch (error) {
+        console.error('Erro de conexão com o Backend. Usando dados locais (Mock).', error);
+      }
+    };
+
+    carregarDadosDoBackend();
+  }, [loggedIn]);
+  const entregasEnviadasRef = useRef<Set<number>>(new Set());
+  const funcionariosEnviadosRef = useRef<Set<number>>(new Set());
+
+  const handleSetEntregas = (acao: any) => {
+    setEntregas((estadoAnterior) => {
+      const novasEntregas = typeof acao === 'function' ? acao(estadoAnterior) : acao;
+
+      // 1. DETECTA SE UMA NOVA ENTREGA FOI ADICIONADA (Inclusão)
+      if (novasEntregas.length > estadoAnterior.length) {
+        const novaEntrega = novasEntregas[0];
+
+        // Verifica se a entrega existe e se o ID já NÃO foi enviado nesta sessão (evita o bug do StrictMode)
+        if (novaEntrega && novaEntrega.funcionario && novaEntrega.id && !entregasEnviadasRef.current.has(novaEntrega.id)) {
+
+          // Marca o ID como enviado IMEDIATAMENTE antes da promise
+          entregasEnviadasRef.current.add(novaEntrega.id);
+
+          fetch('/api/entregas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              funcionario_id: novaEntrega.funcionario_id,
+              funcionario: novaEntrega.funcionario,
+              status: novaEntrega.status,
+              tipo_assinatura: novaEntrega.tipo_assinatura,
+              confianca: novaEntrega.confianca,
+              data: novaEntrega.data,
+              itens: novaEntrega.itens
+            })
+          })
+              .then(res => res.json())
+              .then(data => console.log("Salvo no SQLite com sucesso, BD_ID:", data.id))
+              .catch(err => {
+                console.error("Falha ao salvar no banco:", err);
+              });
+        }
+      }
+      // 2. DETECTA SE O STATUS DE UMA ENTREGA FOI ALTERADO (Edição/Cancelamento)
+      else if (novasEntregas.length === estadoAnterior.length) {
+        for (let i = 0; i < novasEntregas.length; i++) {
+          const entregaNova = novasEntregas[i];
+          const entregaVelha = estadoAnterior.find((e: any) => e.id === entregaNova.id);
+
+          // Se a assinatura foi feita ou entrega foi cancelada...
+          if (entregaVelha && entregaNova.status !== entregaVelha.status) {
+            fetch(`/api/entregas/${entregaNova.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                status: entregaNova.status,
+                tipo_assinatura: entregaNova.tipo_assinatura,
+                confianca: entregaNova.confianca
+              })
+            })
+                .then(() => console.log(`Atualização no BD - A entrega ID ${entregaNova.id} mudou para: ${entregaNova.status}`))
+                .catch(err => console.error('Erro ao atualizar status no banco', err));
+          }
+        }
+      }
+
+      return novasEntregas;
+    });
+  };
+
+  const handleSetFuncionarios = (acao: any) => {
+    setFuncionarios((estadoAnterior) => {
+      const novosFuncionarios = typeof acao === 'function' ? acao(estadoAnterior) : acao;
+
+      // 1. DETECTA ADIÇÃO
+      if (novosFuncionarios.length > estadoAnterior.length) {
+        const novoFuncionario = novosFuncionarios.find((n: any) => !estadoAnterior.some((a: any) => a.id === n.id));
+
+        if (novoFuncionario && novoFuncionario.id && !funcionariosEnviadosRef.current.has(novoFuncionario.id)) {
+          funcionariosEnviadosRef.current.add(novoFuncionario.id);
+
+          fetch('/api/funcionarios', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              nome: novoFuncionario.nome,
+              matricula: novoFuncionario.matricula,
+              setor: novoFuncionario.setor,
+              cargo: novoFuncionario.cargo,
+              email: novoFuncionario.email,
+              telefone: novoFuncionario.telefone
+            })
+          })
+              .then(res => res.json())
+              .then(data => console.log("Funcionário salvo no banco com sucesso, BD_ID:", data.id))
+              .catch(err => console.error("Falha ao salvar funcionário no banco:", err));
+        }
+      }
+      // 2. DETECTA EDIÇÃO
+      else if (novosFuncionarios.length === estadoAnterior.length) {
+        for (let i = 0; i < novosFuncionarios.length; i++) {
+          const funcNovo = novosFuncionarios[i];
+          const funcVelho = estadoAnterior.find((f: any) => f.id === funcNovo.id);
+
+          if (funcVelho && (funcNovo.nome !== funcVelho.nome || funcNovo.setor !== funcVelho.setor || funcNovo.cargo !== funcVelho.cargo || funcNovo.matricula !== funcVelho.matricula || funcNovo.email !== funcVelho.email || funcNovo.telefone !== funcVelho.telefone)) {
+            fetch(`/api/funcionarios/${funcNovo.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(funcNovo)
+            })
+                .then(() => console.log(`Funcionário ID ${funcNovo.id} atualizado no banco.`))
+                .catch(err => console.error('Erro ao atualizar funcionário', err));
+          }
+        }
+      }
+      // 3. DETECTA EXCLUSÃO
+      else if (novosFuncionarios.length < estadoAnterior.length) {
+        for (let i = 0; i < estadoAnterior.length; i++) {
+          const funcVelho = estadoAnterior[i];
+          if (!novosFuncionarios.some((f: any) => f.id === funcVelho.id)) {
+            fetch(`/api/funcionarios/${funcVelho.id}`, {
+              method: 'DELETE'
+            })
+                .then(() => console.log(`Funcionário ID ${funcVelho.id} deletado no banco.`))
+                .catch(err => console.error('Erro ao deletar funcionário', err));
+          }
+        }
+      }
+
+      return novosFuncionarios;
+    });
+  };
+
+  if (!loggedIn) return (<><style>{css}</style><LoginPage onLogin={() => setLoggedIn(true)} /><ToastContainer toasts={toasts} /></>);
+
+  const stockAlerts = epis.filter(e => e.estoque <= e.minimo).length;
+  const pendentes = entregas.filter(e => e.status === "pendente_assinatura").length;
+  const [title, sub] = TITLES[page] || ["",""];
+
+  return (
+    <>
+      <style>{css}</style>
+      <div className="app">
+        <div className="sidebar">
+          <div className="sidebar-logo">
+            <div className="logo-icon">🦺</div>
+            <div><div className="logo-text">SISTEMA EPI</div><div className="logo-sub">NR-06 · BIOMETRIA</div></div>
+          </div>
+          <nav className="nav">
+            {NAV.map(item => (
+              <div key={item.id}>
+                {item.section && <div className="nav-section">{item.section}</div>}
+                <div className={`nav-item${page === item.id ? " active" : ""}`} onClick={() => setPage(item.id)}>
+                  <span className="nav-icon">{item.icon}</span>
+                  {item.label}
+                  {item.id === "epis" && stockAlerts > 0 && <span className="nav-badge">{stockAlerts}</span>}
+                  {item.id === "entregas" && pendentes > 0 && <span className="nav-badge">{pendentes}</span>}
+                  {item.id === "cancelar-entrega" && pendentes > 0 && <span className="nav-badge">{pendentes}</span>}
+                </div>
+              </div>
+            ))}
+          </nav>
+          <div className="sidebar-user">
+            <div className="user-avatar">A</div>
+            <div><div className="user-name">Administrador</div><div className="user-role">admin · v2.1</div></div>
+          </div>
+        </div>
+        <div className="main">
+          <div className="topbar">
+            <div><div className="topbar-title">{title}</div><div className="topbar-sub">{sub}</div></div>
+            <div className="topbar-right">
+              {(stockAlerts > 0 || pendentes > 0) && (<div className="alert alert-warning" style={{ padding: "6px 12px", margin: 0, fontSize: 12 }}>⚠️ {stockAlerts + pendentes} alerta{(stockAlerts + pendentes) !== 1 ? "s" : ""}</div>)}
+              <button className="btn btn-danger btn-sm" onClick={() => setLoggedIn(false)}>Sair</button>
+            </div>
+          </div>
+          <div className="content">
+            {page === "dashboard" && <Dashboard epis={epis} funcionarios={funcionarios} entregas={entregas} onNav={setPage} />}
+            {page === "nova-entrega" && <NovaEntregaPage epis={epis} funcionarios={funcionarios} entregas={entregas} setEntregas={handleSetEntregas} toast={toast} onNav={setPage} />}
+            {page === "cancelar-entrega" && <CancelarEntregaPage entregas={entregas} setEntregas={handleSetEntregas} toast={toast} />}
+            {page === "entregas" && <EntregasPage entregas={entregas} setEntregas={handleSetEntregas} toast={toast} />}
+            {page === "funcionarios" && <FuncionariosPage funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} toast={toast} />}
+            {page === "epis" && <EpisPage epis={epis} setEpis={setEpis} toast={toast} />}
+            {page === "biometria" && <BiometriaPage funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} toast={toast} />}
+            {page === "relatorio-troca" && <RelatorioTrocaPage epis={epis} funcionarios={funcionarios} entregas={entregas} />}
+            {page === "relatorios" && <RelatoriosPage epis={epis} entregas={entregas} />}
+          </div>
+        </div>
+      </div>
+      <ToastContainer toasts={toasts} />
+    </>
+  );
+}
