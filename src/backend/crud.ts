@@ -137,14 +137,18 @@ export function listarFuncionarios(): Promise<Funcionario[]> {
         db.all(sql, [], (err, rows: any[]) => {
             if (err) return reject(err);
 
-            // Mock biometrias until implemented in DB
-            const funcCompletos = rows.map(f => ({
-                ...f,
-                admissao: f.data_admissao, // compatibilidade frontend
-                biometrias: []
-            }));
+            const sqlBios = `SELECT * FROM biometrias`;
+            db.all(sqlBios, [], (errBios, biosRows: any[]) => {
+                if (errBios) return reject(errBios);
 
-            resolve(funcCompletos);
+                const funcCompletos = rows.map(f => ({
+                    ...f,
+                    admissao: f.data_admissao,
+                    biometrias: biosRows.filter(b => b.funcionario_id === f.id)
+                }));
+
+                resolve(funcCompletos);
+            });
         });
     });
 }
@@ -172,6 +176,103 @@ export function atualizarFuncionario(id: number, dados: Partial<Funcionario>): P
 export function deletarFuncionario(id: number): Promise<void> {
     return new Promise((resolve, reject) => {
         const sql = `DELETE FROM funcionarios WHERE id = ?`;
+        db.run(sql, [id], function (err) {
+            if (err) reject(err);
+            else resolve();
+        });
+    });
+}
+
+export interface Epi {
+    id?: number;
+    nome: string;
+    ca?: string;
+    categoria?: string;
+    estoque: number;
+    minimo: number;
+    validade?: string;
+    img?: string;
+    periodicidade?: number;
+    descricao?: string;
+    norma?: string;
+    fabricante?: string;
+}
+
+// CREATE EPI
+export function criarEpi(epi: Epi): Promise<number> {
+    return new Promise((resolve, reject) => {
+        const sql = `INSERT INTO epis (nome, ca, categoria, estoque, minimo, validade, img, periodicidade, descricao, norma, fabricante) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        db.run(sql, [
+            epi.nome, epi.ca, epi.categoria, epi.estoque, epi.minimo,
+            epi.validade, epi.img, epi.periodicidade, epi.descricao, epi.norma, epi.fabricante
+        ], function (err) {
+            if (err) return reject(err);
+            resolve(this.lastID);
+        });
+    });
+}
+
+// READ EPIs
+export function listarEpis(): Promise<Epi[]> {
+    return new Promise((resolve, reject) => {
+        const sql = `SELECT * FROM epis ORDER BY id DESC`;
+        db.all(sql, [], (err, rows: any[]) => {
+            if (err) return reject(err);
+            resolve(rows);
+        });
+    });
+}
+
+// UPDATE EPI
+export function atualizarEpi(id: number, dados: Partial<Epi>): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const sql = `UPDATE epis SET nome = ?, ca = ?, categoria = ?, estoque = ?, minimo = ?, validade = ?, img = ?, periodicidade = ?, descricao = ?, norma = ?, fabricante = ? WHERE id = ?`;
+        db.run(sql, [
+            dados.nome, dados.ca, dados.categoria, dados.estoque, dados.minimo,
+            dados.validade, dados.img, dados.periodicidade, dados.descricao, dados.norma, dados.fabricante,
+            id
+        ], function (err) {
+            if (err) reject(err);
+            else resolve();
+        });
+    });
+}
+
+// DELETE EPI
+export function deletarEpi(id: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const sql = `DELETE FROM epis WHERE id = ?`;
+        db.run(sql, [id], function (err) {
+            if (err) reject(err);
+            else resolve();
+        });
+    });
+}
+
+export interface Biometria {
+    id?: number;
+    funcionario_id: number;
+    tipo: string;
+    data: string;
+    qualidade: number;
+    imagem_base64?: string | null;
+}
+
+// CREATE Biometria
+export function salvarBiometria(b: Biometria): Promise<number> {
+    return new Promise((resolve, reject) => {
+        const sql = `INSERT INTO biometrias (funcionario_id, tipo, data, qualidade, imagem_base64) VALUES (?, ?, ?, ?, ?)`;
+        db.run(sql, [b.funcionario_id, b.tipo, b.data, b.qualidade, b.imagem_base64 ?? null], function (err) {
+            if (err) return reject(err);
+            resolve(this.lastID);
+        });
+    });
+}
+
+// DELETE Biometria
+export function deletarBiometria(id: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const sql = `DELETE FROM biometrias WHERE id = ?`;
         db.run(sql, [id], function (err) {
             if (err) reject(err);
             else resolve();

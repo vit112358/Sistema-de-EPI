@@ -22,6 +22,18 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 // Inicialização das tabelas
+const INIT_BIOMETRIAS = `
+  CREATE TABLE IF NOT EXISTS biometrias (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    funcionario_id INTEGER NOT NULL,
+    tipo TEXT NOT NULL,
+    data TEXT NOT NULL,
+    qualidade REAL,
+    imagem_base64 TEXT,
+    FOREIGN KEY (funcionario_id) REFERENCES funcionarios(id) ON DELETE CASCADE
+  );
+`;
+
 const INIT_ENTREGAS = `
   
     CREATE TABLE IF NOT EXISTS entregas (
@@ -64,18 +76,28 @@ const INIT_FUNCIONARIOS = `
 const INIT_EPIS = `
   CREATE TABLE IF NOT EXISTS epis (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome_equipamento TEXT NOT NULL,
+    nome TEXT NOT NULL,
+    ca TEXT,
+    categoria TEXT,
+    estoque INTEGER NOT NULL DEFAULT 0,
+    minimo INTEGER NOT NULL DEFAULT 0,
+    validade TEXT,
+    img TEXT,
+    periodicidade INTEGER,
     descricao TEXT,
-    quantidade_estoque INTEGER NOT NULL DEFAULT 0,
-    data_validade DATETIME,
-    funcionario_id INTEGER,
-    FOREIGN KEY (funcionario_id) REFERENCES funcionarios(id)
+    norma TEXT,
+    fabricante TEXT
   );
 `;
 
 // Função para inicializar o banco de dados
 export function inicializarBancoDeDados() {
     db.serialize(() => {
+        db.run(INIT_BIOMETRIAS, (err) => {
+            if (err) console.error('Erro ao criar tabela de biometrias:', err.message);
+            else console.log('Tabela "biometrias" verificada/criada com sucesso.');
+        });
+
         // Cria a tabela de entregas
         db.run(INIT_ENTREGAS, (err) => {
             if (err) {

@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 
 // ─── MOCK DATA ───────────────────────────────────────────────────────────────
+const INIT_USERS = [
+  { id: 1, nome: "Administrador", username: "admin", senha: "admin123", role: "admin" },
+];
+
 const INIT_EPIS = [
   { id: 1, nome: "Capacete de Segurança", ca: "CA-12345", categoria: "Proteção da Cabeça", estoque: 45, minimo: 10, validade: "2026-12-01", img: "🪖", periodicidade: 365, descricao: "Capacete classe B, cor amarela, com carneira regulável", norma: "NBR 8221", fabricante: "3M do Brasil" },
   { id: 2, nome: "Luva de Raspa", ca: "CA-22110", categoria: "Proteção das Mãos", estoque: 8, minimo: 20, validade: "2025-06-15", img: "🧤", periodicidade: 90, descricao: "Luva de couro raspa boi, cano curto 15cm", norma: "NBR 13.921", fabricante: "Kalipso" },
@@ -143,8 +147,8 @@ const css = `
   .bio-option-title { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
   .bio-option-desc { font-size: 12px; color: var(--text3); }
   .face-capture { background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px; aspect-ratio: 4/3; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; }
-  .face-guide { width: 120px; height: 150px; border: 2px solid var(--orange); border-radius: 60px; position: absolute; animation: facePulse 2s ease-in-out infinite; }
-  @keyframes facePulse { 0%, 100% { opacity: 0.4; transform: scale(1); } 50% { opacity: 1; transform: scale(1.02); } }
+  .face-guide { width: 120px; height: 150px; border: 2px solid var(--orange); border-radius: 60px; position: absolute; top: 50%; left: 50%; animation: facePulse 2s ease-in-out infinite; }
+  @keyframes facePulse { 0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(1); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.02); } }
   .scan-line { position: absolute; width: 100%; height: 2px; background: linear-gradient(90deg, transparent, var(--orange), transparent); animation: scan 2s linear infinite; }
   @keyframes scan { 0% { top: 20%; } 100% { top: 80%; } }
   .steps { display: flex; gap: 0; margin-bottom: 24px; }
@@ -266,13 +270,14 @@ function ConfirmDialog({ icon, title, desc, onConfirm, onCancel, confirmLabel = 
 }
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
-function LoginPage({ onLogin }) {
-  const [user, setUser] = useState("admin");
+function LoginPage({ onLogin, users }) {
+  const [username, setUsername] = useState("admin");
   const [pass, setPass] = useState("admin123");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const submit = () => {
-    if (user === "admin" && pass === "admin123") { setLoading(true); setTimeout(() => onLogin(), 900); }
+    const found = users.find(u => u.username === username && u.senha === pass);
+    if (found) { setLoading(true); setTimeout(() => onLogin(found), 900); }
     else setErr("Credenciais inválidas");
   };
   return (
@@ -284,7 +289,7 @@ function LoginPage({ onLogin }) {
           <div style={{ fontFamily: "Barlow Condensed", fontSize: 26, fontWeight: 800 }}>SISTEMA EPI</div>
           <div style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono", letterSpacing: 1 }}>CONTROLE DE EQUIPAMENTOS · v2.1</div>
         </div>
-        <div className="input-group"><label className="input-label">Usuário</label><input className="input" value={user} onChange={e => { setUser(e.target.value); setErr(""); }} /></div>
+        <div className="input-group"><label className="input-label">Usuário</label><input className="input" value={username} onChange={e => { setUsername(e.target.value); setErr(""); }} /></div>
         <div className="input-group"><label className="input-label">Senha</label><input className="input" type="password" value={pass} onChange={e => { setPass(e.target.value); setErr(""); }} onKeyDown={e => e.key === "Enter" && submit()} /></div>
         {err && <div className="alert alert-error" style={{ marginBottom: 14 }}>⚠️ {err}</div>}
         <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center", padding: 11 }} onClick={submit} disabled={loading}>
@@ -431,7 +436,8 @@ function EpisPage({ epis, setEpis, toast }) {
       setEpis(prev => prev.map(e => e.id === f.id ? f : e));
       toast("EPI atualizado com sucesso!", "success");
     } else {
-      setEpis(prev => [...prev, { ...f, id: Date.now() }]);
+      const novoEpi = { ...f, id: Date.now() };
+      setEpis(prev => [...prev, novoEpi]);
       toast("EPI cadastrado com sucesso!", "success");
     }
     setEditEpi(null);
@@ -495,7 +501,8 @@ function FuncionariosPage({ funcionarios, setFuncionarios, toast }) {
       setFuncionarios(prev => prev.map(x => x.id === f.id ? { ...x, ...f } : x));
       toast("Dados atualizados!", "success");
     } else {
-      setFuncionarios(prev => [...prev, { ...f, id: Date.now(), biometrias: [] }]);
+      const novoFunc = { ...f, id: Date.now(), biometrias: [] };
+      setFuncionarios(prev => [...prev, novoFunc]);
       toast("Funcionário cadastrado!", "success");
     }
     setEditFunc(null); setAddModal(false);
@@ -574,6 +581,62 @@ function FuncModal({ func, onClose, onSave }) {
   );
 }
 
+// ─── CAMERA CAPTURE ───────────────────────────────────────────────────────────
+function CameraCapture({ onCapture, onCancel }: { onCapture: (base64: string) => void, onCancel: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [ready, setReady] = useState(false);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } })
+      .then(stream => {
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          setReady(true);
+        }
+      })
+      .catch(err => setErrMsg(err.message ?? "Câmera não disponível"));
+    return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
+  }, []);
+
+  const stopStream = () => streamRef.current?.getTracks().forEach(t => t.stop());
+
+  const capture = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    canvas.getContext("2d")!.drawImage(video, 0, 0);
+    stopStream();
+    onCapture(canvas.toDataURL("image/jpeg", 0.85));
+  };
+
+  if (errMsg) return (
+    <div style={{ textAlign: "center", padding: 24, color: "var(--red)" }}>
+      <div style={{ fontSize: 32, marginBottom: 8 }}>📷</div>
+      <div style={{ fontFamily: "IBM Plex Mono", fontSize: 12, marginBottom: 12 }}>{errMsg}</div>
+      <button className="btn btn-ghost" onClick={() => { stopStream(); onCancel(); }}>Voltar</button>
+    </div>
+  );
+
+  return (
+    <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", background: "#000" }}>
+      <video ref={videoRef} autoPlay muted playsInline style={{ width: "100%", display: "block", maxHeight: 280 }} />
+      <canvas ref={canvasRef} style={{ display: "none" }} />
+      <div className="face-guide" />
+      <div style={{ position: "absolute", bottom: 12, left: 0, right: 0, display: "flex", gap: 8, justifyContent: "center" }}>
+        <button className="btn btn-ghost" onClick={() => { stopStream(); onCancel(); }}>Cancelar</button>
+        <button className="btn btn-primary" disabled={!ready} onClick={capture}>📸 Capturar</button>
+      </div>
+    </div>
+  );
+}
+
 // ─── BIOMETRIA PAGE ───────────────────────────────────────────────────────────
 function BiometriaPage({ funcionarios, setFuncionarios, toast }) {
   const [tab, setTab] = useState("registrar");
@@ -583,33 +646,52 @@ function BiometriaPage({ funcionarios, setFuncionarios, toast }) {
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
   const [confirm, setConfirm] = useState(null);
+  const [cameraActive, setCameraActive] = useState(false);
 
   useEffect(() => {
     const found = funcionarios.find(f => f.id === func?.id);
     if (found) setFunc(found);
   }, [funcionarios]);
 
-  const startScan = () => {
+  const saveBiometria = (imagemBase64: string | null = null) => {
+    setCameraActive(false);
     setScanning(true); setProgress(0);
     let p = 0;
     const iv = setInterval(() => {
       p += Math.random() * 12;
+      setProgress(Math.min(100, p));
       if (p >= 100) {
         clearInterval(iv);
-        setTimeout(() => {
-          setScanning(false);
+        setTimeout(async () => {
           const qualidade = +(90 + Math.random() * 9).toFixed(1);
-          setFuncionarios(prev => prev.map(f => f.id === func.id ? { ...f, biometrias: [...f.biometrias, { tipo: type, data: new Date().toISOString().split("T")[0], qualidade }] } : f));
+          const novaBio = { funcionario_id: func.id, tipo: type, data: new Date().toISOString().split("T")[0], qualidade, imagem_base64: imagemBase64 };
+          try {
+            const res = await fetch('/api/biometrias', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novaBio) });
+            const data = await res.json();
+            setFuncionarios(prev => prev.map(f => f.id === func.id ? { ...f, biometrias: [...f.biometrias, { ...novaBio, id: data.id }] } : f));
+          } catch {
+            setFuncionarios(prev => prev.map(f => f.id === func.id ? { ...f, biometrias: [...f.biometrias, novaBio] } : f));
+          }
+          setScanning(false);
           setDone(true);
           toast(`Biometria ${type === "facial" ? "facial" : "digital"} registrada!`, "success");
         }, 400);
       }
-      setProgress(Math.min(100, p));
     }, 180);
   };
 
-  const deleteBio = (funcId, bioIdx) => {
-    setFuncionarios(prev => prev.map(f => f.id === funcId ? { ...f, biometrias: f.biometrias.filter((_, i) => i !== bioIdx) } : f));
+  const handleIniciarCaptura = () => {
+    if (type === "facial") setCameraActive(true);
+    else saveBiometria(null);
+  };
+
+  const deleteBio = async (bioId: number, funcId: number) => {
+    try {
+      await fetch(`/api/biometrias/${bioId}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error('Erro ao deletar biometria', err);
+    }
+    setFuncionarios(prev => prev.map(f => f.id === funcId ? { ...f, biometrias: f.biometrias.filter((b: any) => b.id !== bioId) } : f));
     toast("Biometria excluída.", "info");
     setConfirm(null);
   };
@@ -643,7 +725,7 @@ function BiometriaPage({ funcionarios, setFuncionarios, toast }) {
                       <div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>Cadastrada em {b.data} · Qualidade: {b.qualidade}%</div>
                     </div>
                     <span className="badge badge-green" style={{ marginRight: 8 }}>✓ Ativo</span>
-                    <button className="btn btn-danger btn-xs" onClick={() => setConfirm({ funcId: f.id, bioIdx: i, funcNome: f.nome, tipo: b.tipo })}>🗑 Excluir</button>
+                    <button className="btn btn-danger btn-xs" onClick={() => setConfirm({ bioId: b.id, funcId: f.id, funcNome: f.nome, tipo: b.tipo })}>🗑 Excluir</button>
                   </div>
                 ))}
               </div>
@@ -656,7 +738,7 @@ function BiometriaPage({ funcionarios, setFuncionarios, toast }) {
           icon="🗑️" title="Excluir Biometria" danger
           desc={`Excluir a biometria ${confirm.tipo === "facial" ? "facial" : "digital"} de ${confirm.funcNome}? Esta ação não pode ser desfeita.`}
           confirmLabel="Excluir"
-          onConfirm={() => deleteBio(confirm.funcId, confirm.bioIdx)}
+          onConfirm={() => deleteBio(confirm.bioId, confirm.funcId)}
           onCancel={() => setConfirm(null)}
         />
       )}
@@ -702,11 +784,16 @@ function BiometriaPage({ funcionarios, setFuncionarios, toast }) {
               </div>
             ))}
           </div>
-          {type === "facial" && (
+          {type === "facial" && !cameraActive && (
             <div className="face-capture" style={{ height: 200, marginTop: 16, borderRadius: 10 }}>
               <div className="face-guide" />
               {scanning && <div className="scan-line" />}
-              {!scanning && <div style={{ textAlign: "center", zIndex: 2 }}><div style={{ fontSize: 32 }}>📷</div><div style={{ fontSize: 11, color: "var(--text3)" }}>Câmera simulada</div></div>}
+              {!scanning && <div style={{ textAlign: "center", zIndex: 2 }}><div style={{ fontSize: 32 }}>📷</div><div style={{ fontSize: 11, color: "var(--text3)" }}>Clique em Iniciar Captura para abrir a câmera</div></div>}
+            </div>
+          )}
+          {type === "facial" && cameraActive && (
+            <div style={{ marginTop: 16 }}>
+              <CameraCapture onCapture={saveBiometria} onCancel={() => setCameraActive(false)} />
             </div>
           )}
           {type === "digital" && (
@@ -723,7 +810,7 @@ function BiometriaPage({ funcionarios, setFuncionarios, toast }) {
               <div className="confidence-bar"><div className="confidence-fill" style={{ width: progress + "%", background: "var(--orange)" }} /></div>
             </div>
           )}
-          <button className="btn btn-primary" style={{ marginTop: 16 }} disabled={!type || scanning} onClick={startScan}>
+          <button className="btn btn-primary" style={{ marginTop: 16 }} disabled={!type || scanning || cameraActive} onClick={handleIniciarCaptura}>
             {scanning ? "⏳ Processando..." : "Iniciar Captura"}
           </button>
         </div>
@@ -1302,6 +1389,105 @@ function RelatoriosPage({ epis, entregas }) {
   );
 }
 
+// ─── CADASTRO USUÁRIOS PAGE ───────────────────────────────────────────────────
+function CadastroUsuariosPage({ users, setUsers, currentUser, toast }) {
+  const [modal, setModal] = useState(false);
+  const [editing, setEditing] = useState<any>(null);
+  const [form, setForm] = useState({ nome: "", username: "", senha: "", role: "operador" });
+  const [confirm, setConfirm] = useState<any>(null);
+
+  const openNew = () => { setForm({ nome: "", username: "", senha: "", role: "operador" }); setEditing(null); setModal(true); };
+  const openEdit = (u: any) => { setForm({ ...u, senha: "" }); setEditing(u); setModal(true); };
+
+  const save = () => {
+    if (!form.nome.trim() || !form.username.trim() || (!editing && !form.senha.trim())) {
+      toast("Preencha todos os campos obrigatórios", "error"); return;
+    }
+    const dup = users.find((u: any) => u.username === form.username && u.id !== editing?.id);
+    if (dup) { toast("Username já existe", "error"); return; }
+    if (editing) {
+      setUsers((prev: any[]) => prev.map((u: any) => u.id === editing.id ? { ...u, ...form, senha: form.senha || u.senha } : u));
+      toast("Usuário atualizado!", "success");
+    } else {
+      setUsers((prev: any[]) => [...prev, { ...form, id: Date.now() }]);
+      toast("Usuário criado!", "success");
+    }
+    setModal(false);
+  };
+
+  const del = (u: any) => {
+    if (u.id === currentUser.id) { toast("Não é possível excluir o usuário atual", "error"); return; }
+    const admins = users.filter((x: any) => x.role === "admin");
+    if (u.role === "admin" && admins.length === 1) { toast("Deve existir ao menos um administrador", "error"); return; }
+    setUsers((prev: any[]) => prev.filter((x: any) => x.id !== u.id));
+    toast("Usuário removido", "success");
+    setConfirm(null);
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}>
+        <button className="btn btn-primary" onClick={openNew}>+ Novo Usuário</button>
+      </div>
+      <div className="card">
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Nome</th><th>Username</th><th>Perfil</th><th></th></tr></thead>
+            <tbody>
+              {users.map((u: any) => (
+                <tr key={u.id}>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>{u.nome}</div>
+                    {u.id === currentUser.id && <span className="badge badge-orange" style={{ marginTop: 4 }}>Você</span>}
+                  </td>
+                  <td><span style={{ fontFamily: "IBM Plex Mono", fontSize: 12 }}>{u.username}</span></td>
+                  <td>{u.role === "admin" ? <span className="badge badge-purple">Admin</span> : <span className="badge badge-gray">Operador</span>}</td>
+                  <td>
+                    <div className="action-btns">
+                      <button className="btn btn-ghost btn-xs" onClick={() => openEdit(u)}>✏️ Editar</button>
+                      {u.id !== currentUser.id && <button className="btn btn-danger btn-xs" onClick={() => setConfirm(u)}>🗑</button>}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {modal && (
+        <div className="modal-overlay" onClick={() => setModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">{editing ? "Editar Usuário" : "Novo Usuário"}</span>
+              <button className="close-btn" onClick={() => setModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="input-group"><label className="input-label">Nome *</label><input className="input" value={form.nome} onChange={e => setForm(p => ({ ...p, nome: e.target.value }))} /></div>
+              <div className="input-group"><label className="input-label">Username *</label><input className="input" value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))} /></div>
+              <div className="input-group">
+                <label className="input-label">Senha {editing ? "(deixe em branco para manter)" : "*"}</label>
+                <input className="input" type="password" value={form.senha} onChange={e => setForm(p => ({ ...p, senha: e.target.value }))} />
+              </div>
+              <div className="input-group">
+                <label className="input-label">Perfil</label>
+                <select className="input" value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}>
+                  <option value="admin">Administrador</option>
+                  <option value="operador">Operador</option>
+                </select>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setModal(false)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={save}>💾 Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {confirm && <ConfirmDialog icon="🗑" title="Excluir usuário?" desc={`Tem certeza que deseja remover "${confirm.nome}"?`} danger confirmLabel="Excluir" onConfirm={() => del(confirm)} onCancel={() => setConfirm(null)} />}
+    </div>
+  );
+}
+
 // ─── APP SHELL ────────────────────────────────────────────────────────────────
 const NAV = [
   { id: "dashboard", icon: "⬛", label: "Dashboard", section: "PRINCIPAL" },
@@ -1311,6 +1497,7 @@ const NAV = [
   { id: "funcionarios", icon: "👷", label: "Funcionários", section: "CADASTROS" },
   { id: "epis", icon: "🦺", label: "EPIs" },
   { id: "biometria", icon: "👆", label: "Biometria" },
+  { id: "cadastro-usuarios", icon: "👤", label: "Usuários" },
   { id: "relatorio-troca", icon: "🔄", label: "Relatório de Trocas", section: "RELATÓRIOS" },
   { id: "relatorios", icon: "📊", label: "Indicadores Gerais" },
 ];
@@ -1322,6 +1509,7 @@ const TITLES = {
   funcionarios: ["Funcionários","Cadastro e edição"],
   epis: ["EPIs","Catálogo, estoque e edição"],
   biometria: ["Biometria","Cadastro e gerenciamento"],
+  "cadastro-usuarios": ["Usuários","Gerenciamento de usuários do sistema"],
   "relatorio-troca": ["Relatório de Trocas","Calendário de substituição de EPIs por colaborador"],
   relatorios: ["Indicadores Gerais","Performance e conformidade"],
 };
@@ -1334,7 +1522,8 @@ interface Entrega {
 }
 
 export default function App() {
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [users, setUsers] = useState(INIT_USERS);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [page, setPage] = useState("dashboard");
   const [epis, setEpis] = useState(INIT_EPIS);
   const [funcionarios, setFuncionarios] = useState(INIT_FUNCIONARIOS);
@@ -1343,7 +1532,7 @@ export default function App() {
 
   // INTEGRAÇÃO COM O BACKEND: Busca os dados reais quando o login é feito
   useEffect(() => {
-    if (!loggedIn) return;
+    if (!currentUser) return;
 
     const carregarDadosDoBackend = async () => {
       try {
@@ -1370,9 +1559,15 @@ export default function App() {
           }
         }
 
-        // Futuramente você pode adicionar:
-        // const resEpis = await fetch('http://localhost:3000/api/epis');
-        // const resFuncs = await fetch('http://localhost:3000/api/funcionarios');
+        // Busca EPIs reais
+        const resEpis = await fetch('/api/epis');
+        if (resEpis.ok) {
+          const dadosEpis = await resEpis.json();
+          if (dadosEpis && dadosEpis.length > 0) {
+            setEpis(dadosEpis);
+            console.log("EPIs carregados do banco:", dadosEpis);
+          }
+        }
 
       } catch (error) {
         console.error('Erro de conexão com o Backend. Usando dados locais (Mock).', error);
@@ -1380,9 +1575,10 @@ export default function App() {
     };
 
     carregarDadosDoBackend();
-  }, [loggedIn]);
+  }, [currentUser]);
   const entregasEnviadasRef = useRef<Set<number>>(new Set());
   const funcionariosEnviadosRef = useRef<Set<number>>(new Set());
+  const episEnviadosRef = useRef<Set<number>>(new Set());
 
   const handleSetEntregas = (acao: any) => {
     setEntregas((estadoAnterior) => {
@@ -1508,7 +1704,68 @@ export default function App() {
     });
   };
 
-  if (!loggedIn) return (<><style>{css}</style><LoginPage onLogin={() => setLoggedIn(true)} /><ToastContainer toasts={toasts} /></>);
+  const handleSetEpis = (acao: any) => {
+    setEpis((estadoAnterior) => {
+      const novosEpis = typeof acao === 'function' ? acao(estadoAnterior) : acao;
+
+      // 1. DETECTA ADIÇÃO
+      if (novosEpis.length > estadoAnterior.length) {
+        const novoEpi = novosEpis.find((n: any) => !estadoAnterior.some((a: any) => a.id === n.id));
+
+        if (novoEpi && novoEpi.id && !episEnviadosRef.current.has(novoEpi.id)) {
+          episEnviadosRef.current.add(novoEpi.id);
+
+          fetch('/api/epis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              nome: novoEpi.nome, ca: novoEpi.ca, categoria: novoEpi.categoria,
+              estoque: novoEpi.estoque, minimo: novoEpi.minimo, validade: novoEpi.validade,
+              img: novoEpi.img, periodicidade: novoEpi.periodicidade,
+              descricao: novoEpi.descricao, norma: novoEpi.norma, fabricante: novoEpi.fabricante
+            })
+          })
+            .then(res => res.json())
+            .then(data => console.log("EPI salvo no banco com sucesso, BD_ID:", data.id))
+            .catch(err => console.error("Falha ao salvar EPI no banco:", err));
+        }
+      }
+      // 2. DETECTA EDIÇÃO
+      else if (novosEpis.length === estadoAnterior.length) {
+        for (let i = 0; i < novosEpis.length; i++) {
+          const epiNovo = novosEpis[i];
+          const epiVelho = estadoAnterior.find((e: any) => e.id === epiNovo.id);
+
+          if (epiVelho && (epiNovo.nome !== epiVelho.nome || epiNovo.ca !== epiVelho.ca || epiNovo.estoque !== epiVelho.estoque || epiNovo.minimo !== epiVelho.minimo || epiNovo.categoria !== epiVelho.categoria || epiNovo.fabricante !== epiVelho.fabricante)) {
+            fetch(`/api/epis/${epiNovo.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(epiNovo)
+            })
+              .then(() => console.log(`EPI ID ${epiNovo.id} atualizado no banco.`))
+              .catch(err => console.error('Erro ao atualizar EPI', err));
+          }
+        }
+      }
+      // 3. DETECTA EXCLUSÃO
+      else if (novosEpis.length < estadoAnterior.length) {
+        for (let i = 0; i < estadoAnterior.length; i++) {
+          const epiVelho = estadoAnterior[i];
+          if (!novosEpis.some((e: any) => e.id === epiVelho.id)) {
+            fetch(`/api/epis/${epiVelho.id}`, {
+              method: 'DELETE'
+            })
+              .then(() => console.log(`EPI ID ${epiVelho.id} deletado no banco.`))
+              .catch(err => console.error('Erro ao deletar EPI', err));
+          }
+        }
+      }
+
+      return novosEpis;
+    });
+  };
+
+  if (!currentUser) return (<><style>{css}</style><LoginPage onLogin={(u: any) => setCurrentUser(u)} users={users} /><ToastContainer toasts={toasts} /></>);
 
   const stockAlerts = epis.filter(e => e.estoque <= e.minimo).length;
   const pendentes = entregas.filter(e => e.status === "pendente_assinatura").length;
@@ -1524,7 +1781,7 @@ export default function App() {
             <div><div className="logo-text">SISTEMA EPI</div><div className="logo-sub">NR-06 · BIOMETRIA</div></div>
           </div>
           <nav className="nav">
-            {NAV.map(item => (
+            {NAV.filter(item => !(item.id === "cadastro-usuarios" && currentUser.role !== "admin")).map(item => (
               <div key={item.id}>
                 {item.section && <div className="nav-section">{item.section}</div>}
                 <div className={`nav-item${page === item.id ? " active" : ""}`} onClick={() => setPage(item.id)}>
@@ -1538,8 +1795,8 @@ export default function App() {
             ))}
           </nav>
           <div className="sidebar-user">
-            <div className="user-avatar">A</div>
-            <div><div className="user-name">Administrador</div><div className="user-role">admin · v2.1</div></div>
+            <div className="user-avatar">{currentUser.nome[0].toUpperCase()}</div>
+            <div><div className="user-name">{currentUser.nome}</div><div className="user-role">{currentUser.role} · v2.1</div></div>
           </div>
         </div>
         <div className="main">
@@ -1547,7 +1804,7 @@ export default function App() {
             <div><div className="topbar-title">{title}</div><div className="topbar-sub">{sub}</div></div>
             <div className="topbar-right">
               {(stockAlerts > 0 || pendentes > 0) && (<div className="alert alert-warning" style={{ padding: "6px 12px", margin: 0, fontSize: 12 }}>⚠️ {stockAlerts + pendentes} alerta{(stockAlerts + pendentes) !== 1 ? "s" : ""}</div>)}
-              <button className="btn btn-danger btn-sm" onClick={() => setLoggedIn(false)}>Sair</button>
+              <button className="btn btn-danger btn-sm" onClick={() => setCurrentUser(null)}>Sair</button>
             </div>
           </div>
           <div className="content">
@@ -1556,8 +1813,9 @@ export default function App() {
             {page === "cancelar-entrega" && <CancelarEntregaPage entregas={entregas} setEntregas={handleSetEntregas} toast={toast} />}
             {page === "entregas" && <EntregasPage entregas={entregas} setEntregas={handleSetEntregas} toast={toast} />}
             {page === "funcionarios" && <FuncionariosPage funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} toast={toast} />}
-            {page === "epis" && <EpisPage epis={epis} setEpis={setEpis} toast={toast} />}
+            {page === "epis" && <EpisPage epis={epis} setEpis={handleSetEpis} toast={toast} />}
             {page === "biometria" && <BiometriaPage funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} toast={toast} />}
+            {page === "cadastro-usuarios" && <CadastroUsuariosPage users={users} setUsers={setUsers} currentUser={currentUser} toast={toast} />}
             {page === "relatorio-troca" && <RelatorioTrocaPage epis={epis} funcionarios={funcionarios} entregas={entregas} />}
             {page === "relatorios" && <RelatoriosPage epis={epis} entregas={entregas} />}
           </div>
