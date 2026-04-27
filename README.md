@@ -116,3 +116,18 @@ Opção 1 — Instância separada por empresa (mais simples)
 - Cada empresa tem seu próprio SQLite isolado
 - No nginx, configura subdomínios: empresa1.seuapp.com, empresa2.seuapp.com
 - Limitação: a VM free tem 1GB de RAM, comporta ~5-10 empresas
+
+
+cd /mnt/c/Users/vitor/OneDrive/Projetos/vitejs-vite-hfwmqfrm
+bash deploy.sh
+
+● Sim, a forma mais comum é subdomínio por empresa:
+
+empresa1.seuapp.com.br                                                                                                                                                                                                      
+empresa2.seuapp.com.br
+
+Como funciona:
+1. Compra um domínio (ex: seuapp.com.br)
+2. No DNS, cria um wildcard *.seuapp.com.br → 163.176.188.254 — assim qualquer subdomínio já aponta pro servidor
+3. No nginx, cada empresa tem seu próprio bloco server com server_name empresa1.seuapp.com.br apontando para a porta do backend dela
+
