@@ -590,6 +590,10 @@ function CameraCapture({ onCapture, onCancel }: { onCapture: (base64: string) =>
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setErrMsg("Câmera requer conexão segura (HTTPS).");
+      return;
+    }
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } })
       .then(stream => {
