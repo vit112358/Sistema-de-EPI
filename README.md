@@ -131,3 +131,83 @@ Como funciona:
 2. No DNS, cria um wildcard *.seuapp.com.br → 163.176.188.254 — assim qualquer subdomínio já aponta pro servidor
 3. No nginx, cada empresa tem seu próprio bloco server com server_name empresa1.seuapp.com.br apontando para a porta do backend dela
 
+● Comandos executados no servidor (via SSH)
+
+# Instalar dependências
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -                                                                                                                                                                                                                                           
+sudo apt install -y nodejs nginx build-essential
+sudo npm install -g pm2 tsx
+
+# Enviar projeto (WSL local)
+scp -i ~/Downloads/ssh-key-2026-04-26.key -r /mnt/c/Users/vitor/OneDrive/Projetos/vitejs-vite-hfwmqfrm/. ubuntu@163.176.188.254:/home/ubuntu/app
+
+# Instalar dependências do projeto
+cd /home/ubuntu/app
+npm install
+
+# Recompilar sqlite3
+npm install sqlite3 --build-from-source
+
+# Build do frontend
+npm run build
+
+# Iniciar backend com PM2
+pm2 start "tsx src/backend/server.ts" --name backend
+pm2 save
+pm2 startup
+
+# Copiar dist para pasta do nginx
+sudo cp -r /home/ubuntu/app/dist /var/www/html/app
+sudo chown -R www-data:www-data /var/www/html/app
+
+# Configurar nginx
+sudo nano /etc/nginx/sites-available/app
+sudo ln -s /etc/nginx/sites-available/app /etc/nginx/sites-enabled/
+sudo rm /etc/nginx/sites-enabled/default
+sudo systemctl reload nginx
+
+# Abrir portas no firewall
+sudo ufw allow 80
+sudo ufw allow 22
+sudo ufw enable
+
+# Remover regra iptables bloqueante
+---
+Remover regra bloqueante do iptables
+
+O Oracle Cloud adiciona por padrão uma regra que bloqueia todo tráfego de entrada antes do UFW processar. É necessário removê-la.
+
+# 1. Listar as regras para identificar o número da regra REJECT
+sudo iptables -L INPUT --line-numbers
+
+Procure a linha com **_REJECT_** e **_icmp-host-prohibited_** — geralmente é a regra número 5:
+
+num  target   prot  source    destination
+
+...
+
+5    REJECT   all   anywhere  anywhere   reject-with icmp-host-prohibited
+
+# 2. Remover a regra pelo número encontrado (ex: 5)
+sudo iptables -D INPUT 5
+
+▎ Atenção: o número pode variar. Sempre confirme com o primeiro comando antes de deletar.
+
+
+Conteúdo do /etc/nginx/sites-available/app
+```
+server {
+    listen 80;
+
+    root /var/www/html/app;
+    index index.html;
+    
+    location /api/ {
+      proxy_pass http://localhost:3000;
+    }
+    
+    location / {
+      try_files $uri $uri/ /index.html;
+    }
+}
+```
