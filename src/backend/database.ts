@@ -73,6 +73,13 @@ const INIT_FUNCIONARIOS = `
   );
 `;
 
+const INIT_CARGOS = `
+  CREATE TABLE IF NOT EXISTS cargos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL UNIQUE
+  );
+`;
+
 const INIT_EPIS = `
   CREATE TABLE IF NOT EXISTS epis (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,6 +100,11 @@ const INIT_EPIS = `
 // Função para inicializar o banco de dados
 export function inicializarBancoDeDados() {
     db.serialize(() => {
+        db.run(INIT_CARGOS, (err) => {
+            if (err) console.error('Erro ao criar tabela de cargos:', err.message);
+            else console.log('Tabela "cargos" verificada/criada com sucesso.');
+        });
+
         db.run(INIT_BIOMETRIAS, (err) => {
             if (err) console.error('Erro ao criar tabela de biometrias:', err.message);
             else console.log('Tabela "biometrias" verificada/criada com sucesso.');

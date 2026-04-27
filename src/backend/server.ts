@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria} from './crud.ts';
+import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo} from './crud.ts';
 
 const app = express();
 const PORT = 3000;
@@ -133,6 +133,24 @@ app.delete('/api/epis/:id', async (req, res) => {
         console.error('Erro ao deletar EPI:', error);
         res.status(500).json({ error: 'Erro ao deletar EPI' });
     }
+});
+
+// Rotas Cargos
+app.get('/api/cargos', async (req, res) => {
+    try { res.json(await listarCargos()); }
+    catch (error) { res.status(500).json({ error: 'Erro ao buscar cargos' }); }
+});
+app.post('/api/cargos', async (req, res) => {
+    try { const id = await criarCargo(req.body.nome); res.status(201).json({ id, nome: req.body.nome }); }
+    catch (error) { res.status(500).json({ error: 'Erro ao criar cargo' }); }
+});
+app.put('/api/cargos/:id', async (req, res) => {
+    try { await atualizarCargo(parseInt(req.params.id), req.body.nome); res.json({ success: true }); }
+    catch (error) { res.status(500).json({ error: 'Erro ao atualizar cargo' }); }
+});
+app.delete('/api/cargos/:id', async (req, res) => {
+    try { await deletarCargo(parseInt(req.params.id)); res.json({ success: true }); }
+    catch (error) { res.status(500).json({ error: 'Erro ao deletar cargo' }); }
 });
 
 // Rotas Biometrias

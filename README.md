@@ -211,3 +211,16 @@ server {
     }
 }
 ```
+
+1. Compra do domínio — segurid.com.br comprado no Registro.br
+2. DNS — Adicionados dois registros A na zona DNS do Registro.br:
+   - segurid.com.br → 163.176.188.254
+   - www.segurid.com.br → 163.176.188.254
+3. Certificado SSL — Instalado o Certbot (cliente Let's Encrypt) no servidor e gerado o certificado para segurid.com.br e www.segurid.com.br. Validade: 90 dias com renovação automática configurada.
+4. Nginx — Atualizado o arquivo /etc/nginx/sites-available/app com:
+   - Redirecionamento automático HTTP → HTTPS
+   - SSL com o certificado do Let's Encrypt
+   - Proxy /api/ → backend na porta 3000
+   - Root apontando para /var/www/html/app (onde ficam os arquivos do frontend)
+5. Resultado — App acessível em https://segurid.com.br com câmera funcionando via HTTPS.
+

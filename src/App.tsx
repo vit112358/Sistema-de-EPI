@@ -14,6 +14,14 @@ const INIT_EPIS = [
   { id: 6, nome: "Colete Refletivo", ca: "CA-66780", categoria: "Sinalização", estoque: 18, minimo: 12, validade: "2026-05-01", img: "🦺", periodicidade: 365, descricao: "Colete refletivo laranja, faixas de 5cm em prata, classe 2", norma: "NBR 15292", fabricante: "Omni" },
 ];
 
+const INIT_CARGOS = [
+  { id: 1, nome: "Operador de Máquina" },
+  { id: 2, nome: "Técnico de Manutenção" },
+  { id: 3, nome: "Auxiliar de Logística" },
+  { id: 4, nome: "Inspetor de Qualidade" },
+  { id: 5, nome: "Técnico de Segurança" },
+];
+
 const INIT_FUNCIONARIOS = [
   { id: 1, nome: "Carlos Eduardo Silva", matricula: "F001", setor: "Produção", cargo: "Operador de Máquina", email: "carlos@empresa.com", telefone: "(11) 99999-0001", admissao: "2022-03-15", biometrias: [{ tipo: "facial", data: "2024-01-10", qualidade: 94.2 }, { tipo: "digital", data: "2024-01-10", qualidade: 98.1 }] },
   { id: 2, nome: "Ana Paula Ferreira", matricula: "F002", setor: "Manutenção", cargo: "Técnica de Manutenção", email: "ana@empresa.com", telefone: "(11) 99999-0002", admissao: "2021-07-01", biometrias: [{ tipo: "facial", data: "2024-02-05", qualidade: 91.7 }] },
@@ -492,7 +500,96 @@ function EpisPage({ epis, setEpis, toast }) {
 }
 
 // ─── FUNCIONARIOS PAGE ────────────────────────────────────────────────────────
-function FuncionariosPage({ funcionarios, setFuncionarios, toast }) {
+function CargosPage({ cargos, setCargos, toast }) {
+  const [modal, setModal] = useState(false);
+  const [editing, setEditing] = useState<any>(null);
+  const [nome, setNome] = useState("");
+  const [confirmDel, setConfirmDel] = useState<any>(null);
+
+  const openAdd = () => { setEditing(null); setNome(""); setModal(true); };
+  const openEdit = (c) => { setEditing(c); setNome(c.nome); setModal(true); };
+
+  const save = () => {
+    if (!nome.trim()) return;
+    if (editing) {
+      fetch(`/api/cargos/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: nome.trim() }) })
+        .catch(() => {});
+      setCargos(prev => prev.map(c => c.id === editing.id ? { ...c, nome: nome.trim() } : c));
+      toast("Cargo atualizado!", "success");
+    } else {
+      const tempId = Date.now();
+      fetch('/api/cargos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: nome.trim() }) })
+        .then(r => r.json()).then(data => setCargos(prev => prev.map(c => c.id === tempId ? { ...c, id: data.id } : c)))
+        .catch(() => {});
+      setCargos(prev => [...prev, { id: tempId, nome: nome.trim() }]);
+      toast("Cargo cadastrado!", "success");
+    }
+    setModal(false);
+  };
+
+  const del = (c) => {
+    fetch(`/api/cargos/${c.id}`, { method: 'DELETE' }).catch(() => {});
+    setCargos(prev => prev.filter(x => x.id !== c.id));
+    setConfirmDel(null);
+    toast("Cargo removido!", "success");
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}>
+        <button className="btn btn-primary" onClick={openAdd}>+ Novo Cargo</button>
+      </div>
+      <div className="card">
+        <div className="card-body">
+          {cargos.length === 0 ? (
+            <div className="empty-state"><div className="empty-icon">🏷️</div>Nenhum cargo cadastrado</div>
+          ) : (
+            <table>
+              <thead><tr><th>#</th><th>Nome do Cargo</th><th style={{ width: 100 }}>Ações</th></tr></thead>
+              <tbody>
+                {cargos.map((c, i) => (
+                  <tr key={c.id}>
+                    <td style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text3)" }}>{String(i + 1).padStart(2, "0")}</td>
+                    <td style={{ fontWeight: 500 }}>{c.nome}</td>
+                    <td>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button className="btn btn-ghost btn-xs" onClick={() => openEdit(c)}>✏️</button>
+                        <button className="btn btn-ghost btn-xs" style={{ color: "var(--red)" }} onClick={() => setConfirmDel(c)}>🗑</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+      {modal && (
+        <div className="modal-overlay" onClick={() => setModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">{editing ? "Editar Cargo" : "Novo Cargo"}</span>
+              <button className="close-btn" onClick={() => setModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="input-group">
+                <label className="input-label">Nome do Cargo</label>
+                <input className="input" value={nome} onChange={e => setNome(e.target.value)} onKeyDown={e => e.key === "Enter" && save()} autoFocus />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setModal(false)}>Cancelar</button>
+              <button className="btn btn-primary" disabled={!nome.trim()} onClick={save}>💾 Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {confirmDel && <ConfirmDialog icon="🗑" title="Remover cargo?" desc={`Remover "${confirmDel.nome}"? Funcionários com esse cargo não serão afetados.`} danger confirmLabel="Remover" onConfirm={() => del(confirmDel)} onCancel={() => setConfirmDel(null)} />}
+    </div>
+  );
+}
+
+function FuncionariosPage({ funcionarios, setFuncionarios, cargos, toast }) {
   const [addModal, setAddModal] = useState(false);
   const [editFunc, setEditFunc] = useState(null);
 
@@ -537,6 +634,7 @@ function FuncionariosPage({ funcionarios, setFuncionarios, toast }) {
       {(editFunc || addModal) && (
         <FuncModal
           func={editFunc || { nome: "", matricula: "", setor: "Produção", cargo: "", email: "", telefone: "", admissao: "" }}
+          cargos={cargos}
           onClose={() => { setEditFunc(null); setAddModal(false); }}
           onSave={saveFunc}
         />
@@ -545,7 +643,7 @@ function FuncionariosPage({ funcionarios, setFuncionarios, toast }) {
   );
 }
 
-function FuncModal({ func, onClose, onSave }) {
+function FuncModal({ func, cargos, onClose, onSave }) {
   const [f, setF] = useState({ ...func });
   const setores = ["Produção","Manutenção","Logística","Qualidade","Segurança","Administrativo","TI","RH"];
   return (
@@ -565,7 +663,7 @@ function FuncModal({ func, onClose, onSave }) {
           </div>
           <div className="input-row">
             <div className="input-group"><label className="input-label">Setor</label><select className="input" value={f.setor} onChange={e => setF(p => ({ ...p, setor: e.target.value }))}>{setores.map(s => <option key={s}>{s}</option>)}</select></div>
-            <div className="input-group"><label className="input-label">Cargo</label><input className="input" value={f.cargo} onChange={e => setF(p => ({ ...p, cargo: e.target.value }))} /></div>
+            <div className="input-group"><label className="input-label">Cargo</label><select className="input" value={f.cargo} onChange={e => setF(p => ({ ...p, cargo: e.target.value }))}><option value="">Selecione...</option>{cargos.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}</select></div>
           </div>
           <div className="input-row">
             <div className="input-group"><label className="input-label">E-mail</label><input className="input" type="email" value={f.email} onChange={e => setF(p => ({ ...p, email: e.target.value }))} /></div>
@@ -1274,6 +1372,31 @@ function RelatorioTrocaPage({ epis, funcionarios, entregas }) {
   const urgLabel = { atrasado: "🔴 Atrasado", critico: "🟠 Crítico (≤30d)", proximo: "🟡 Próximo (≤90d)", ok: "🟢 Em dia" };
   const urgClass = { atrasado: "badge-red", critico: "badge-orange", proximo: "badge-orange", ok: "badge-green" };
 
+  const exportarExcel = () => {
+    const statusLabel = { atrasado: "Atrasado", critico: "Crítico (≤30d)", proximo: "Próximo (≤90d)", ok: "Em dia" };
+    const linhas = [
+      ["Funcionário", "Matrícula", "Setor", "EPI", "CA", "Periodicidade (dias)", "Última Entrega", "Próxima Troca", "Dias Restantes", "Status"],
+      ...trocas.map(t => [
+        t.func.nome,
+        t.func.matricula,
+        t.func.setor,
+        t.epi.nome,
+        t.epi.ca,
+        t.epi.periodicidade,
+        t.dataEntrega,
+        t.dataTroca,
+        t.diasRestantes,
+        statusLabel[t.urgencia],
+      ])
+    ];
+    const csv = "﻿" + linhas.map(l => l.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `relatorio-trocas-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+
   return (
     <div>
       <div className="stats-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 20 }}>
@@ -1296,6 +1419,7 @@ function RelatorioTrocaPage({ epis, funcionarios, entregas }) {
         <div className="card-header">
           <span className="card-title">🔄 Calendário de Trocas de EPI</span>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={exportarExcel}>⬇️ Exportar Excel</button>
             <select className="input" style={{ width: "auto", padding: "5px 10px", fontSize: 12 }} value={filtroFunc} onChange={e => setFiltroFunc(e.target.value)}>
               <option value="todos">Todos funcionários</option>
               {funcionarios.map(f => <option key={f.id} value={f.id}>{f.nome.split(" ")[0]} {f.nome.split(" ")[1]}</option>)}
@@ -1507,6 +1631,7 @@ const NAV = [
   { id: "cancelar-entrega", icon: "🚫", label: "Cancelar Entrega" },
   { id: "entregas", icon: "📦", label: "Histórico de Entregas" },
   { id: "funcionarios", icon: "👷", label: "Funcionários", section: "CADASTROS" },
+  { id: "cargos", icon: "🏷️", label: "Cargos" },
   { id: "epis", icon: "🦺", label: "EPIs" },
   { id: "biometria", icon: "👆", label: "Biometria" },
   { id: "cadastro-usuarios", icon: "👤", label: "Usuários" },
@@ -1519,6 +1644,7 @@ const TITLES = {
   "cancelar-entrega": ["Cancelar Entrega","Estorno e cancelamento de entregas"],
   entregas: ["Histórico de Entregas","Registros, assinaturas e ações pendentes"],
   funcionarios: ["Funcionários","Cadastro e edição"],
+  cargos: ["Cargos","Cadastro e edição de cargos"],
   epis: ["EPIs","Catálogo, estoque e edição"],
   biometria: ["Biometria","Cadastro e gerenciamento"],
   "cadastro-usuarios": ["Usuários","Gerenciamento de usuários do sistema"],
@@ -1537,6 +1663,7 @@ export default function App() {
   const [users, setUsers] = useState(INIT_USERS);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [page, setPage] = useState("dashboard");
+  const [cargos, setCargos] = useState(INIT_CARGOS);
   const [epis, setEpis] = useState(INIT_EPIS);
   const [funcionarios, setFuncionarios] = useState(INIT_FUNCIONARIOS);
   const [entregas, setEntregas] = useState(INIT_ENTREGAS);
@@ -1569,6 +1696,13 @@ export default function App() {
             setFuncionarios(dadosFuncs);
             console.log("Funcionários carregados do banco:", dadosFuncs);
           }
+        }
+
+        // Busca cargos reais
+        const resCargos = await fetch('/api/cargos');
+        if (resCargos.ok) {
+          const dadosCargos = await resCargos.json();
+          if (dadosCargos && dadosCargos.length > 0) setCargos(dadosCargos);
         }
 
         // Busca EPIs reais
@@ -1824,7 +1958,8 @@ export default function App() {
             {page === "nova-entrega" && <NovaEntregaPage epis={epis} funcionarios={funcionarios} entregas={entregas} setEntregas={handleSetEntregas} toast={toast} onNav={setPage} />}
             {page === "cancelar-entrega" && <CancelarEntregaPage entregas={entregas} setEntregas={handleSetEntregas} toast={toast} />}
             {page === "entregas" && <EntregasPage entregas={entregas} setEntregas={handleSetEntregas} toast={toast} />}
-            {page === "funcionarios" && <FuncionariosPage funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} toast={toast} />}
+            {page === "funcionarios" && <FuncionariosPage funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} cargos={cargos} toast={toast} />}
+            {page === "cargos" && <CargosPage cargos={cargos} setCargos={setCargos} toast={toast} />}
             {page === "epis" && <EpisPage epis={epis} setEpis={handleSetEpis} toast={toast} />}
             {page === "biometria" && <BiometriaPage funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} toast={toast} />}
             {page === "cadastro-usuarios" && <CadastroUsuariosPage users={users} setUsers={setUsers} currentUser={currentUser} toast={toast} />}

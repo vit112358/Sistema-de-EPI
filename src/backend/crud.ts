@@ -258,6 +258,40 @@ export interface Biometria {
     imagem_base64?: string | null;
 }
 
+// ── CARGOS ──────────────────────────────────────────────────────────────────
+
+export function listarCargos(): Promise<{ id: number; nome: string }[]> {
+    return new Promise((resolve, reject) => {
+        db.all(`SELECT * FROM cargos ORDER BY nome ASC`, [], (err, rows: any[]) => {
+            if (err) reject(err); else resolve(rows);
+        });
+    });
+}
+
+export function criarCargo(nome: string): Promise<number> {
+    return new Promise((resolve, reject) => {
+        db.run(`INSERT INTO cargos (nome) VALUES (?)`, [nome], function (err) {
+            if (err) reject(err); else resolve(this.lastID);
+        });
+    });
+}
+
+export function atualizarCargo(id: number, nome: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        db.run(`UPDATE cargos SET nome = ? WHERE id = ?`, [nome, id], function (err) {
+            if (err) reject(err); else resolve();
+        });
+    });
+}
+
+export function deletarCargo(id: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+        db.run(`DELETE FROM cargos WHERE id = ?`, [id], function (err) {
+            if (err) reject(err); else resolve();
+        });
+    });
+}
+
 // CREATE Biometria
 export function salvarBiometria(b: Biometria): Promise<number> {
     return new Promise((resolve, reject) => {
