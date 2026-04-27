@@ -17,7 +17,7 @@ const INIT_EPIS = [
 const INIT_FUNCIONARIOS = [
   { id: 1, nome: "Carlos Eduardo Silva", matricula: "F001", setor: "Produção", cargo: "Operador de Máquina", email: "carlos@empresa.com", telefone: "(11) 99999-0001", admissao: "2022-03-15", biometrias: [{ tipo: "facial", data: "2024-01-10", qualidade: 94.2 }, { tipo: "digital", data: "2024-01-10", qualidade: 98.1 }] },
   { id: 2, nome: "Ana Paula Ferreira", matricula: "F002", setor: "Manutenção", cargo: "Técnica de Manutenção", email: "ana@empresa.com", telefone: "(11) 99999-0002", admissao: "2021-07-01", biometrias: [{ tipo: "facial", data: "2024-02-05", qualidade: 91.7 }] },
-  { id: 3, nome: "PICA MOLE Roberto Mendes Costa ", matricula: "F003", setor: "Logística", cargo: "Auxiliar de Logística", email: "roberto@empresa.com", telefone: "(11) 99999-0003", admissao: "2023-01-10", biometrias: [] },
+  { id: 3, nome: "Roberto Mendes Costa ", matricula: "F003", setor: "Logística", cargo: "Auxiliar de Logística", email: "roberto@empresa.com", telefone: "(11) 99999-0003", admissao: "2023-01-10", biometrias: [] },
   { id: 4, nome: "Fernanda Lima Souza", matricula: "F004", setor: "Qualidade", cargo: "Inspetora de Qualidade", email: "fernanda@empresa.com", telefone: "(11) 99999-0004", admissao: "2020-11-20", biometrias: [{ tipo: "digital", data: "2024-03-01", qualidade: 97.3 }] },
   { id: 5, nome: "Marcos Antônio Rocha", matricula: "F005", setor: "Segurança", cargo: "Técnico de Segurança", email: "marcos@empresa.com", telefone: "(11) 99999-0005", admissao: "2019-05-15", biometrias: [] },
 ];
@@ -1069,6 +1069,13 @@ function NovaEntregaPage({ epis, funcionarios, entregas, setEntregas, toast, onN
   const drawing = useRef(false);
   const [hasSig, setHasSig] = useState(false);
 
+  useEffect(() => {
+    if (func) {
+      const updated = funcionarios.find(f => f.id === func.id);
+      if (updated) setFunc(updated);
+    }
+  }, [funcionarios]);
+
   const steps = ["Funcionário","Itens","Confirmar","Assinar","Recibo"];
 
   const toggleEpi = (id) => {
@@ -1202,7 +1209,9 @@ function NovaEntregaPage({ epis, funcionarios, entregas, setEntregas, toast, onN
           <div className="card-header"><span className="card-title">Assinatura Biométrica</span></div>
           <div className="card-body">
             <div className="bio-panel">
-              {[{ t: "facial", icon: "👤", title: "Facial", desc: "Embedding 128D" }, { t: "digital", icon: "👆", title: "Digital", desc: "Template biométrico" }, { t: "manual", icon: "✍️", title: "Manual", desc: "Assinatura digitalizada" }].map(o => (
+              {[{ t: "facial", icon: "👤", title: "Facial", desc: "Embedding 128D" }, { t: "digital", icon: "👆", title: "Digital", desc: "Template biométrico" }]
+                .filter(o => { const fu: any = funcionarios.find((f: any) => f.id === func?.id) ?? func; return fu?.biometrias?.some((b: any) => b.tipo === o.t); })
+                .map(o => (
                 <div key={o.t} className={`bio-option${sigType === o.t ? " active" : ""}`} onClick={() => setSigType(o.t)}>
                   <div className="bio-option-icon">{o.icon}</div>
                   <div><div className="bio-option-title">{o.title}</div><div className="bio-option-desc">{o.desc}</div></div>
@@ -1210,12 +1219,11 @@ function NovaEntregaPage({ epis, funcionarios, entregas, setEntregas, toast, onN
               ))}
             </div>
             {sigType === "facial" && (<div className="face-capture" style={{ height: 160, marginTop: 16, borderRadius: 10 }}><div className="face-guide" />{signing && <div className="scan-line" />}{!signing && <div style={{ textAlign: "center", zIndex: 2 }}><div style={{ fontSize: 28 }}>📷</div></div>}</div>)}
-            {sigType === "manual" && (<div style={{ marginTop: 14 }}><div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 6 }}>Assine abaixo:</div><canvas ref={canvasRef} className="sig-canvas" width={480} height={110} style={{ width: "100%", display: "block" }} onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw} /><button className="btn btn-ghost btn-sm" style={{ marginTop: 6 }} onClick={clearSig}>Limpar</button></div>)}
             {signing && (<div className="confidence-meter" style={{ marginTop: 14 }}><div className="confidence-label"><span>Verificando...</span><span>{sigProgress.toFixed(0)}%</span></div><div className="confidence-bar"><div className="confidence-fill" style={{ width: sigProgress + "%", background: "var(--orange)" }} /></div></div>)}
           </div>
           <div className="modal-footer">
             <button className="btn btn-ghost" onClick={() => setStep(2)}>← Voltar</button>
-            <button className="btn btn-primary" disabled={!sigType || signing || (sigType === "manual" && !hasSig)} onClick={startSign}>{signing ? "⏳ Verificando..." : "✅ Assinar"}</button>
+            <button className="btn btn-primary" disabled={!sigType || signing} onClick={startSign}>{signing ? "⏳ Verificando..." : "✅ Assinar"}</button>
           </div>
         </div>
       )}
