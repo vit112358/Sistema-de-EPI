@@ -41,6 +41,12 @@ export function criarEntrega(entrega: Entrega): Promise<number> {
                     stmt.run(entregaId, item.epi_id, item.nome, item.img, item.qtd);
                 });
                 stmt.finalize();
+
+                const stockStmt = db.prepare(`UPDATE epis SET estoque = MAX(0, estoque - ?) WHERE id = ?`);
+                entrega.itens.forEach(item => {
+                    stockStmt.run(item.qtd, item.epi_id);
+                });
+                stockStmt.finalize();
             }
 
             resolve(entregaId);
@@ -74,11 +80,31 @@ export function listarEntregas(): Promise<Entrega[]> {
 // UPDATE (Atualizar status e assinatura)
 export function atualizarStatusEntrega(id: number, dados: Partial<Entrega>): Promise<void> {
     return new Promise((resolve, reject) => {
-        const sql = `UPDATE entregas SET status = ?, tipo_assinatura = ?, confianca = ? WHERE id = ?`;
-        db.run(sql, [dados.status, dados.tipo_assinatura, dados.confianca, id], function (err) {
-            if (err) reject(err);
-            else resolve();
-        });
+        const updateStatus = () => {
+            const sql = `UPDATE entregas SET status = ?, tipo_assinatura = ?, confianca = ? WHERE id = ?`;
+            db.run(sql, [dados.status, dados.tipo_assinatura, dados.confianca, id], (err) => {
+                if (err) reject(err); else resolve();
+            });
+        };
+
+        if (dados.status === 'cancelado') {
+            db.get(`SELECT status FROM entregas WHERE id = ?`, [id], (errCheck, row: any) => {
+                if (errCheck) return reject(errCheck);
+                if (!row || row.status === 'cancelado') return updateStatus();
+
+                db.all(`SELECT epi_id, qtd FROM entrega_itens WHERE entrega_id = ?`, [id], (errItens, itens: any[]) => {
+                    if (errItens) return reject(errItens);
+                    if (itens?.length > 0) {
+                        const stmt = db.prepare(`UPDATE epis SET estoque = estoque + ? WHERE id = ?`);
+                        itens.forEach(item => stmt.run(item.qtd, item.epi_id));
+                        stmt.finalize();
+                    }
+                    updateStatus();
+                });
+            });
+        } else {
+            updateStatus();
+        }
     });
 }
 

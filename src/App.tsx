@@ -1,5 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import Landing from "./Landing";
+import { jsPDF } from "jspdf";
+
+// ─── CONFIGURAÇÕES DA EMPRESA ─────────────────────────────────────────────────
+const COMPANY_CONFIG = {
+  nome: "Empresa Exemplo Ltda.",
+  endereco: "Av. Paulista, 1000 – Bela Vista, São Paulo/SP – CEP 01310-100",
+};
 
 // ─── MOCK DATA ───────────────────────────────────────────────────────────────
 const INIT_USERS = [
@@ -1004,10 +1011,10 @@ function SignModal({ entrega, onClose, onSign }) {
 
 function EntregasPage({ entregas, setEntregas, toast }) {
   const [filter, setFilter] = useState("todos");
+  const [busca, setBusca] = useState("");
+  const [ordemNome, setOrdemNome] = useState<"asc" | "desc" | null>(null);
   const [signModal, setSignModal] = useState(null);
   const [cancelConfirm, setCancelConfirm] = useState(null);
-
-  const filtered = filter === "todos" ? entregas : entregas.filter(e => e.status === filter);
 
   const doSign = (id, tipo) => {
     const confianca = tipo === "facial" ? +(88 + Math.random() * 10).toFixed(1) : tipo === "digital" ? +(92 + Math.random() * 7).toFixed(1) : null;
@@ -1022,17 +1029,54 @@ function EntregasPage({ entregas, setEntregas, toast }) {
     toast("Entrega cancelada.", "info");
   };
 
+  let filtered = filter === "todos" ? entregas : entregas.filter(e => e.status === filter);
+  if (busca.trim()) {
+    const termo = busca.trim().toLowerCase();
+    filtered = filtered.filter(e => e.funcionario.toLowerCase().includes(termo));
+  }
+  if (ordemNome) {
+    filtered = [...filtered].sort((a, b) =>
+      ordemNome === "asc"
+        ? a.funcionario.localeCompare(b.funcionario, "pt-BR")
+        : b.funcionario.localeCompare(a.funcionario, "pt-BR")
+    );
+  }
+
+  const toggleOrdem = () =>
+    setOrdemNome(prev => prev === null ? "asc" : prev === "asc" ? "desc" : null);
+
   return (
     <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
         {[["todos","Todos"],["assinado","Assinados"],["pendente_assinatura","Pendentes"],["cancelado","Cancelados"]].map(([v,l]) => (
           <button key={v} className={`btn ${filter === v ? "btn-primary" : "btn-ghost"} btn-sm`} onClick={() => setFilter(v)}>{l}</button>
         ))}
       </div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, alignItems: "center" }}>
+        <input
+          type="text"
+          className="input"
+          placeholder="Filtrar por funcionário..."
+          value={busca}
+          onChange={e => setBusca(e.target.value)}
+          style={{ maxWidth: 280 }}
+        />
+        {busca && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setBusca("")}>✕ Limpar</button>
+        )}
+      </div>
       <div className="card">
         <div className="table-wrap">
           <table>
-            <thead><tr><th>#</th><th>Funcionário</th><th>Data</th><th>Itens</th><th>Status</th><th>Assinatura</th><th>Ações</th></tr></thead>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th style={{ cursor: "pointer", userSelect: "none" }} onClick={toggleOrdem}>
+                  Funcionário {ordemNome === "asc" ? "↑" : ordemNome === "desc" ? "↓" : "↕"}
+                </th>
+                <th>Data</th><th>Itens</th><th>Status</th><th>Assinatura</th><th>Ações</th>
+              </tr>
+            </thead>
             <tbody>
               {filtered.map(e => (
                 <tr key={e.id}>
@@ -1158,7 +1202,7 @@ function CancelarEntregaPage({ entregas, setEntregas, toast }) {
 }
 
 // ─── NOVA ENTREGA ─────────────────────────────────────────────────────────────
-function NovaEntregaPage({ epis, funcionarios, entregas, setEntregas, toast, onNav }) {
+function NovaEntregaPage({ epis, setEpis, funcionarios, entregas, setEntregas, toast, onNav }) {
   const [step, setStep] = useState(0);
   const [func, setFunc] = useState(null);
   const [selected, setSelected] = useState([]);
@@ -1219,13 +1263,121 @@ function NovaEntregaPage({ epis, funcionarios, entregas, setEntregas, toast, onN
 
   const selEpis = epis.filter(e => selected.includes(e.id));
 
+  const exportarFicha = () => {
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const pageW = 210;
+    const margin = 20;
+    const contentW = pageW - margin * 2;
+    let y = 20;
+
+    // Título
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("FICHA DE ENTREGA DE EPI", pageW / 2, y, { align: "center" });
+    y += 7;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(120, 120, 120);
+    doc.text(`#${String(newId).slice(-6)} · ${new Date().toLocaleDateString("pt-BR")}`, pageW / 2, y, { align: "center" });
+    doc.setTextColor(0, 0, 0);
+    y += 10;
+
+    // Linha separadora
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, y, pageW - margin, y);
+    y += 8;
+
+    // Texto da declaração
+    const nomeFuncionario = func?.nome ?? "";
+    const declaracao =
+      `Eu, ${nomeFuncionario}, declaro para todos os efeitos previstos na legislação, haver recebido gratuitamente, conforme descrito na C.L.T. nos artigos 166, 167 e demais artigos adstritos à matéria, na NR - 6 e nos itens 1.4.2 e 1.5.5.1.2 da NR - 1 DISPOSIÇÕES GERAIS e GERENCIAMENTO DE RISCOS OCUPACIONAIS, após treinamento e orientação do uso adequado, aplicação, guarda, conservação, substituição e requisitos de higiene, em palestra realizada pelo Serviço Especializado em Segurança e Medicina do Trabalho da empresa, ${COMPANY_CONFIG.nome}, situada ${COMPANY_CONFIG.endereco}, o(s) equipamento(s) de proteção individual abaixo descrito(s) e designado(s) como EPIs, os quais obrigo-me a usá-lo(s) sistematicamente em meu trabalho, mediante ainda, os termos seguintes:\n\n` +
+      `a) O EPI será usado unicamente para finalidade a que se destina e qualquer alteração que o torne parcial ou totalmente danificado será por mim comunicado à empresa;\n\n` +
+      `b) Declaro que me responsabilizo pela guarda e conservação dos EPI's que me foram confiados e que, na impossibilidade de seu uso, deverei comunicar a chefia imediatamente, para as providências que se fizerem necessárias, e os devolverei após o vencimento de duração estipulada;\n\n` +
+      `c) Estou ciente e de pleno acordo que a falta de uso por mim, dos EPI's fornecidos pela Empresa, constitui Ato Faltoso, sujeito às sanções disciplinares previstas na legislação pertinente aos assuntos, Regulamento Interno e Normas de Segurança da Empresa;\n\n` +
+      `d) Reconhecendo expressamente que a sua não utilização configura em falta grave capitulada na letra "h", do Artigo 482 da C.L.T., como ato de indisciplina ou de insubordinação, ensejadora da rescisão do meu contrato de trabalho por justa causa;\n\n` +
+      `e) Autorizo expressamente a Empresa a proceder descontos nos meus salários, vencimentos, gratificações, indenizações, os valores dos EPI's que por ventura por mim forem:\n` +
+      `   - Danificados propositadamente;\n` +
+      `   - Extraviados;\n` +
+      `   - Não devolvidos à empresa para substituição;\n\n` +
+      `f) Tomei ciência e estou de acordo com os termos da declaração acima, assinando-a de livre e espontânea vontade, após sua leitura nessa data`;
+
+    doc.setFontSize(9);
+    const linhas = doc.splitTextToSize(declaracao, contentW);
+    doc.text(linhas, margin, y);
+    y += linhas.length * 4.5 + 10;
+
+    // Data
+    const dataHoje = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+    doc.setFontSize(9);
+    doc.text(`Data: ${dataHoje}`, margin, y);
+    y += 16;
+
+    // Campo de assinatura centralizado
+    const sigLineW = 80;
+    const sigLineX = (pageW - sigLineW) / 2;
+    doc.setDrawColor(0, 0, 0);
+    doc.line(sigLineX, y, sigLineX + sigLineW, y);
+    y += 5;
+    doc.setFontSize(9);
+    doc.text(nomeFuncionario, pageW / 2, y, { align: "center" });
+    y += 4;
+    doc.setTextColor(100, 100, 100);
+    doc.text("Assinatura do Funcionário", pageW / 2, y, { align: "center" });
+    doc.setTextColor(0, 0, 0);
+    y += 14;
+
+    // Linha separadora antes da tabela
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, y, pageW - margin, y);
+    y += 6;
+
+    // Título da tabela
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("EPIs ENTREGUES", margin, y);
+    y += 6;
+
+    // Cabeçalho da tabela
+    const colW = [contentW * 0.42, contentW * 0.22, contentW * 0.14, contentW * 0.22];
+    const headers = ["EPI / Descrição", "CA", "Quantidade", "Próxima Troca"];
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, y - 4, contentW, 7, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    let colX = margin;
+    headers.forEach((h, i) => { doc.text(h, colX + 2, y); colX += colW[i]; });
+    y += 5;
+    doc.setFont("helvetica", "normal");
+
+    // Linhas da tabela
+    selEpis.forEach((epi) => {
+      const proxTroca = fmtDate(addDays(new Date().toISOString().split("T")[0], epi.periodicidade));
+      const row = [epi.nome, epi.ca, `${qtds[epi.id] || 1} un`, proxTroca];
+      doc.setDrawColor(220, 220, 220);
+      doc.line(margin, y + 3, pageW - margin, y + 3);
+      colX = margin;
+      row.forEach((cell, i) => {
+        doc.setFontSize(8);
+        const wrapped = doc.splitTextToSize(cell, colW[i] - 4);
+        doc.text(wrapped, colX + 2, y);
+        colX += colW[i];
+      });
+      y += 7;
+    });
+
+    doc.save(`ficha_epi_${nomeFuncionario.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.pdf`);
+  };
+
   if (done) return (
     <div>
       <div className="alert alert-success" style={{ marginBottom: 20 }}>✅ Entrega registrada e assinada com sucesso!</div>
       <div className="card">
         <div className="card-header" style={{ background: "var(--surface2)" }}>
           <div><div style={{ fontFamily: "Barlow Condensed", fontSize: 20, fontWeight: 800 }}>FICHA DE ENTREGA DE EPI</div><div style={{ fontSize: 11, fontFamily: "IBM Plex Mono", color: "var(--text3)" }}>#{String(newId).slice(-6)} · {new Date().toLocaleDateString("pt-BR")}</div></div>
-          <span className="badge badge-green" style={{ fontSize: 13 }}>✓ ASSINADO</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button className="btn btn-ghost btn-sm" onClick={exportarFicha}>⬇️ Exportar Ficha</button>
+            <span className="badge badge-green" style={{ fontSize: 13 }}>✓ ASSINADO</span>
+          </div>
         </div>
         <div className="card-body">
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
@@ -1756,7 +1908,10 @@ export default function App() {
             })
           })
               .then(res => res.json())
-              .then(data => console.log("Salvo no SQLite com sucesso, BD_ID:", data.id))
+              .then(data => {
+                console.log("Salvo no SQLite com sucesso, BD_ID:", data.id);
+                fetch('/api/epis').then(r => r.json()).then(updatedEpis => setEpis(updatedEpis));
+              })
               .catch(err => {
                 console.error("Falha ao salvar no banco:", err);
               });
@@ -1779,7 +1934,12 @@ export default function App() {
                 confianca: entregaNova.confianca
               })
             })
-                .then(() => console.log(`Atualização no BD - A entrega ID ${entregaNova.id} mudou para: ${entregaNova.status}`))
+                .then(() => {
+                  console.log(`Atualização no BD - A entrega ID ${entregaNova.id} mudou para: ${entregaNova.status}`);
+                  if (entregaNova.status === 'cancelado') {
+                    fetch('/api/epis').then(r => r.json()).then(updatedEpis => setEpis(updatedEpis));
+                  }
+                })
                 .catch(err => console.error('Erro ao atualizar status no banco', err));
           }
         }
@@ -1958,7 +2118,7 @@ export default function App() {
           </div>
           <div className="content">
             {page === "dashboard" && <Dashboard epis={epis} funcionarios={funcionarios} entregas={entregas} onNav={setPage} />}
-            {page === "nova-entrega" && <NovaEntregaPage epis={epis} funcionarios={funcionarios} entregas={entregas} setEntregas={handleSetEntregas} toast={toast} onNav={setPage} />}
+            {page === "nova-entrega" && <NovaEntregaPage epis={epis} setEpis={handleSetEpis} funcionarios={funcionarios} entregas={entregas} setEntregas={handleSetEntregas} toast={toast} onNav={setPage} />}
             {page === "cancelar-entrega" && <CancelarEntregaPage entregas={entregas} setEntregas={handleSetEntregas} toast={toast} />}
             {page === "entregas" && <EntregasPage entregas={entregas} setEntregas={handleSetEntregas} toast={toast} />}
             {page === "funcionarios" && <FuncionariosPage funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} cargos={cargos} toast={toast} />}
