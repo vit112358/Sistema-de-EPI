@@ -224,3 +224,6 @@ server {
    - Root apontando para /var/www/html/app (onde ficam os arquivos do frontend)
 5. Resultado — App acessível em https://segurid.com.br com câmera funcionando via HTTPS.
 
+como subir
+npx vite build
+bash deploy.sh --skip-build

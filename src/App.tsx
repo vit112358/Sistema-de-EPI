@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import Landing from "./Landing";
 
 // ─── MOCK DATA ───────────────────────────────────────────────────────────────
 const INIT_USERS = [
@@ -1660,6 +1661,7 @@ interface Entrega {
 }
 
 export default function App() {
+  const [showLanding, setShowLanding] = useState(true);
   const [users, setUsers] = useState(INIT_USERS);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [page, setPage] = useState("dashboard");
@@ -1911,6 +1913,7 @@ export default function App() {
     });
   };
 
+  if (showLanding) return <Landing onEnter={() => setShowLanding(false)} />;
   if (!currentUser) return (<><style>{css}</style><LoginPage onLogin={(u: any) => setCurrentUser(u)} users={users} /><ToastContainer toasts={toasts} /></>);
 
   const stockAlerts = epis.filter(e => e.estoque <= e.minimo).length;
@@ -1950,7 +1953,7 @@ export default function App() {
             <div><div className="topbar-title">{title}</div><div className="topbar-sub">{sub}</div></div>
             <div className="topbar-right">
               {(stockAlerts > 0 || pendentes > 0) && (<div className="alert alert-warning" style={{ padding: "6px 12px", margin: 0, fontSize: 12 }}>⚠️ {stockAlerts + pendentes} alerta{(stockAlerts + pendentes) !== 1 ? "s" : ""}</div>)}
-              <button className="btn btn-danger btn-sm" onClick={() => setCurrentUser(null)}>Sair</button>
+              <button className="btn btn-danger btn-sm" onClick={() => { setCurrentUser(null); setShowLanding(true); }}>Sair</button>
             </div>
           </div>
           <div className="content">
