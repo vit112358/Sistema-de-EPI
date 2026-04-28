@@ -2086,8 +2086,8 @@ export default function App() {
       <div className="app">
         <div className="sidebar">
           <div className="sidebar-logo">
-            <div className="logo-icon">🦺</div>
-            <div><div className="logo-text">SISTEMA EPI</div><div className="logo-sub">NR-06 · BIOMETRIA</div></div>
+            <div className="logo-icon" style={{background:'transparent',padding:0}}><img src="/favicon.svg" style={{width:'36px',height:'36px',objectFit:'contain'}} /></div>
+            <div><div className="logo-text">SegurID</div><div className="logo-sub">Entrega de EPI por biometria</div></div>
           </div>
           <nav className="nav">
             {NAV.filter(item => !(item.id === "cadastro-usuarios" && currentUser.role !== "admin")).map(item => (
