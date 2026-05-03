@@ -393,7 +393,7 @@ function Dashboard({ epis, funcionarios, entregas, onNav }) {
 }
 
 // ─── EPI MODAL ────────────────────────────────────────────────────────────────
-function EpiModal({ epi, onClose, onSave }) {
+function EpiModal({ epi, onClose, onSave, onDelete }) {
   const [f, setF] = useState({ ...epi });
   const emojis = ["🪖","🧤","🥾","🥽","🔇","🦺","😷","🧣","🧰","🔦"];
   const categorias = ["Proteção da Cabeça","Proteção das Mãos","Proteção dos Pés","Proteção Visual","Proteção Auditiva","Sinalização","Proteção Respiratória","Proteção do Corpo"];
@@ -434,6 +434,9 @@ function EpiModal({ epi, onClose, onSave }) {
           <div className="input-group"><label className="input-label">Descrição / Especificação</label><textarea className="input" value={f.descricao} onChange={e => setF(p => ({ ...p, descricao: e.target.value }))} /></div>
         </div>
         <div className="modal-footer">
+          {epi.id && onDelete && (
+            <button className="btn btn-danger" style={{ marginRight: "auto" }} onClick={onDelete}>🗑 Excluir EPI</button>
+          )}
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
           <button className="btn btn-primary" onClick={() => onSave(f)}>💾 Salvar</button>
         </div>
@@ -446,6 +449,7 @@ function EpiModal({ epi, onClose, onSave }) {
 function EpisPage({ epis, setEpis, toast }) {
   const [addModal, setAddModal] = useState(false);
   const [editEpi, setEditEpi] = useState(null);
+  const [confirmDel, setConfirmDel] = useState(null);
 
   const saveEpi = (f) => {
     if (f.id) {
@@ -456,6 +460,14 @@ function EpisPage({ epis, setEpis, toast }) {
       setEpis(prev => [...prev, novoEpi]);
       toast("EPI cadastrado com sucesso!", "success");
     }
+    setEditEpi(null);
+    setAddModal(false);
+  };
+
+  const deleteEpi = (e) => {
+    setEpis(prev => prev.filter(x => x.id !== e.id));
+    toast("EPI excluído!", "success");
+    setConfirmDel(null);
     setEditEpi(null);
     setAddModal(false);
   };
@@ -474,12 +486,15 @@ function EpisPage({ epis, setEpis, toast }) {
           const low = e.estoque <= e.minimo;
           const color = low ? "var(--red)" : pct > 60 ? "var(--green)" : "var(--orange)";
           return (
-            <div key={e.id} className={`epi-card${low ? " low" : ""}`} onClick={() => setEditEpi(e)}>
+            <div key={e.id} className={`epi-card${low ? " low" : ""}`}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div className="epi-icon">{e.img}</div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
                   {low && <span className="badge badge-red">⚠ Baixo</span>}
-                  <span className="badge badge-gray">✏️ Editar</span>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button className="btn btn-ghost btn-xs" onClick={() => setEditEpi(e)}>✏️ Editar</button>
+                    <button className="btn btn-danger btn-xs" onClick={() => setConfirmDel(e)}>🗑</button>
+                  </div>
                 </div>
               </div>
               <div className="epi-name">{e.nome}</div>
@@ -501,6 +516,18 @@ function EpisPage({ epis, setEpis, toast }) {
           epi={editEpi || { nome: "", ca: "", categoria: "Proteção da Cabeça", estoque: 0, minimo: 0, validade: "", img: "🪖", periodicidade: 90, descricao: "", norma: "", fabricante: "" }}
           onClose={() => { setEditEpi(null); setAddModal(false); }}
           onSave={saveEpi}
+          onDelete={editEpi ? () => setConfirmDel(editEpi) : null}
+        />
+      )}
+      {confirmDel && (
+        <ConfirmDialog
+          icon="⚠️"
+          title="Excluir EPI?"
+          desc={`Esta ação é irreversível. O EPI "${confirmDel.nome}" será permanentemente removido do sistema.`}
+          danger
+          confirmLabel="Excluir Permanentemente"
+          onConfirm={() => deleteEpi(confirmDel)}
+          onCancel={() => setConfirmDel(null)}
         />
       )}
     </div>
@@ -600,6 +627,7 @@ function CargosPage({ cargos, setCargos, toast }) {
 function FuncionariosPage({ funcionarios, setFuncionarios, cargos, toast }) {
   const [addModal, setAddModal] = useState(false);
   const [editFunc, setEditFunc] = useState(null);
+  const [confirmDel, setConfirmDel] = useState(null);
 
   const saveFunc = (f) => {
     if (f.id) {
@@ -611,6 +639,14 @@ function FuncionariosPage({ funcionarios, setFuncionarios, cargos, toast }) {
       toast("Funcionário cadastrado!", "success");
     }
     setEditFunc(null); setAddModal(false);
+  };
+
+  const deleteFunc = (f) => {
+    setFuncionarios(prev => prev.filter(x => x.id !== f.id));
+    toast("Funcionário excluído!", "success");
+    setConfirmDel(null);
+    setEditFunc(null);
+    setAddModal(false);
   };
 
   return (
@@ -635,7 +671,10 @@ function FuncionariosPage({ funcionarios, setFuncionarios, cargos, toast }) {
                   : <span className="badge badge-orange">⚠ Sem biometria</span>}
               </div>
             </div>
-            <button className="btn btn-ghost btn-xs" onClick={() => setEditFunc(f)} style={{ flexShrink: 0, alignSelf: "flex-start" }}>✏️ Editar</button>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0, alignSelf: "flex-start" }}>
+              <button className="btn btn-ghost btn-xs" onClick={() => setEditFunc(f)}>✏️ Editar</button>
+              <button className="btn btn-danger btn-xs" onClick={() => setConfirmDel(f)}>🗑</button>
+            </div>
           </div>
         ))}
       </div>
@@ -645,13 +684,25 @@ function FuncionariosPage({ funcionarios, setFuncionarios, cargos, toast }) {
           cargos={cargos}
           onClose={() => { setEditFunc(null); setAddModal(false); }}
           onSave={saveFunc}
+          onDelete={editFunc ? () => setConfirmDel(editFunc) : null}
+        />
+      )}
+      {confirmDel && (
+        <ConfirmDialog
+          icon="⚠️"
+          title="Excluir Funcionário?"
+          desc={`Esta ação é irreversível. "${confirmDel.nome}" e todos os seus dados serão permanentemente removidos do sistema.`}
+          danger
+          confirmLabel="Excluir Permanentemente"
+          onConfirm={() => deleteFunc(confirmDel)}
+          onCancel={() => setConfirmDel(null)}
         />
       )}
     </div>
   );
 }
 
-function FuncModal({ func, cargos, onClose, onSave }) {
+function FuncModal({ func, cargos, onClose, onSave, onDelete }) {
   const [f, setF] = useState({ ...func });
   const setores = ["Produção","Manutenção","Logística","Qualidade","Segurança","Administrativo","TI","RH"];
   return (
@@ -679,6 +730,9 @@ function FuncModal({ func, cargos, onClose, onSave }) {
           </div>
         </div>
         <div className="modal-footer">
+          {func.id && onDelete && (
+            <button className="btn btn-danger" style={{ marginRight: "auto" }} onClick={onDelete}>🗑 Excluir Funcionário</button>
+          )}
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
           <button className="btn btn-primary" onClick={() => onSave(f)}>💾 Salvar</button>
         </div>
