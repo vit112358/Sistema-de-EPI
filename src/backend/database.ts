@@ -142,6 +142,11 @@ export function inicializarBancoDeDados() {
                 console.error('Erro ao criar tabela de epis:', err.message);
             } else {
                 console.log('Tabela "epis" verificada/criada com sucesso.');
+                db.all(`PRAGMA table_info(epis)`, [], (_e, cols: any[]) => {
+                    if (!cols.some(c => c.name === 'cas_json')) {
+                        db.run(`ALTER TABLE epis ADD COLUMN cas_json TEXT`);
+                    }
+                });
             }
         });
 
@@ -151,6 +156,11 @@ export function inicializarBancoDeDados() {
                 console.error('Erro ao criar tabela de itens:', err.message);
             } else {
                 console.log('Tabela "entrega_itens" verificada/criada com sucesso.');
+                db.all(`PRAGMA table_info(entrega_itens)`, [], (_e, cols: any[]) => {
+                    if (!cols.some(c => c.name === 'ca')) {
+                        db.run(`ALTER TABLE entrega_itens ADD COLUMN ca TEXT`);
+                    }
+                });
             }
         });
     });

@@ -45,6 +45,28 @@ export function compareDescriptors(a: Float32Array, b: Float32Array): number {
   return Math.min(99, Math.round(Math.pow(1 - dist / MATCH_THRESHOLD, 0.3) * 100));
 }
 
+// ── Liveness detection ───────────────────────────────────────────────────────
+
+function ptDist(a: faceapi.Point, b: faceapi.Point): number {
+  return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+}
+
+export async function detectLandmarks(video: HTMLVideoElement): Promise<faceapi.FaceLandmarks68 | null> {
+  await loadFaceModels();
+  const result = await faceapi
+    .detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+    .withFaceLandmarks();
+  return result?.landmarks ?? null;
+}
+
+// Eye Aspect Ratio — left eye pts 36-41, right eye pts 42-47
+export function computeEAR(landmarks: faceapi.FaceLandmarks68): number {
+  const p = landmarks.positions;
+  const leftEAR  = (ptDist(p[37], p[41]) + ptDist(p[38], p[40])) / (2 * ptDist(p[36], p[39]));
+  const rightEAR = (ptDist(p[43], p[47]) + ptDist(p[44], p[46])) / (2 * ptDist(p[42], p[45]));
+  return (leftEAR + rightEAR) / 2;
+}
+
 export const MODEL_VERSION = "ssd-v1";
 
 export const descriptorToJson = (d: Float32Array): string =>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import Landing from "./Landing";
 import { jsPDF } from "jspdf";
-import { loadFaceModels, extractDescriptor, compareDescriptors, descriptorToJson, jsonToDescriptor, isCurrentModelDescriptor, MODEL_VERSION } from "./faceApi";
+import { loadFaceModels, extractDescriptor, compareDescriptors, descriptorToJson, jsonToDescriptor, isCurrentModelDescriptor, MODEL_VERSION, detectLandmarks, computeEAR } from "./faceApi";
 
 // ─── CONFIGURAÇÕES DA EMPRESA ─────────────────────────────────────────────────
 const COMPANY_CONFIG = {
@@ -398,8 +398,17 @@ function Dashboard({ epis, funcionarios, entregas, onNav }) {
 // ─── EPI MODAL ────────────────────────────────────────────────────────────────
 function EpiModal({ epi, onClose, onSave, onDelete }) {
   const [f, setF] = useState({ ...epi });
+  const initCas = () => {
+    try { if (epi.cas_json) return JSON.parse(epi.cas_json); } catch {}
+    return epi.ca ? [{ numero: epi.ca, validade: epi.validade || "" }] : [{ numero: "", validade: "" }];
+  };
+  const [cas, setCas] = useState<{numero: string, validade: string}[]>(initCas);
   const emojis = ["🪖","🧤","🥾","🥽","🔇","🦺","😷","🧣","🧰","🔦"];
   const categorias = ["Proteção da Cabeça","Proteção das Mãos","Proteção dos Pés","Proteção Visual","Proteção Auditiva","Sinalização","Proteção Respiratória","Proteção do Corpo"];
+  const handleSave = () => {
+    const casValidos = cas.filter(c => c.numero.trim());
+    onSave({ ...f, cas_json: JSON.stringify(casValidos), ca: casValidos[0]?.numero || "", validade: casValidos[0]?.validade || "" });
+  };
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
@@ -413,15 +422,29 @@ function EpiModal({ epi, onClose, onSave, onDelete }) {
           </div>
           <div className="input-row">
             <div className="input-group"><label className="input-label">Nome do EPI</label><input className="input" value={f.nome} onChange={e => setF(p => ({ ...p, nome: e.target.value }))} /></div>
-            <div className="input-group"><label className="input-label">Número CA</label><input className="input" value={f.ca} onChange={e => setF(p => ({ ...p, ca: e.target.value }))} /></div>
-          </div>
-          <div className="input-row">
             <div className="input-group"><label className="input-label">Categoria</label><select className="input" value={f.categoria} onChange={e => setF(p => ({ ...p, categoria: e.target.value }))}>{categorias.map(c => <option key={c}>{c}</option>)}</select></div>
-            <div className="input-group"><label className="input-label">Fabricante</label><input className="input" value={f.fabricante} onChange={e => setF(p => ({ ...p, fabricante: e.target.value }))} /></div>
+          </div>
+          <div className="input-group">
+            <label className="input-label">Números CA — máx. 5 <span style={{ fontWeight: 400, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>({cas.length}/5)</span></label>
+            {cas.map((ca, i) => (
+              <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                <input className="input" placeholder="Número CA" value={ca.numero} style={{ flex: 1 }}
+                  onChange={ev => setCas(p => p.map((c, j) => j === i ? { ...c, numero: ev.target.value } : c))} />
+                <input className="input" type="date" value={ca.validade} style={{ width: 160 }}
+                  onChange={ev => setCas(p => p.map((c, j) => j === i ? { ...c, validade: ev.target.value } : c))} />
+                {cas.length > 1 && (
+                  <button onClick={() => setCas(p => p.filter((_, j) => j !== i))}
+                    style={{ background: "transparent", border: "1px solid var(--border2)", borderRadius: 6, color: "var(--red)", cursor: "pointer", padding: "4px 10px", fontSize: 16 }}>×</button>
+                )}
+              </div>
+            ))}
+            {cas.length < 5 && (
+              <button className="btn btn-ghost btn-sm" onClick={() => setCas(p => [...p, { numero: "", validade: "" }])}>+ Adicionar CA</button>
+            )}
           </div>
           <div className="input-row">
+            <div className="input-group"><label className="input-label">Fabricante</label><input className="input" value={f.fabricante} onChange={e => setF(p => ({ ...p, fabricante: e.target.value }))} /></div>
             <div className="input-group"><label className="input-label">Norma Técnica</label><input className="input" value={f.norma} onChange={e => setF(p => ({ ...p, norma: e.target.value }))} /></div>
-            <div className="input-group"><label className="input-label">Validade do CA</label><input className="input" type="date" value={f.validade} onChange={e => setF(p => ({ ...p, validade: e.target.value }))} /></div>
           </div>
           <div className="input-row">
             <div className="input-group"><label className="input-label">Estoque Atual</label><input className="input" type="number" value={f.estoque} onChange={e => setF(p => ({ ...p, estoque: +e.target.value }))} /></div>
@@ -441,7 +464,7 @@ function EpiModal({ epi, onClose, onSave, onDelete }) {
             <button className="btn btn-danger" style={{ marginRight: "auto" }} onClick={onDelete}>🗑 Excluir EPI</button>
           )}
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={() => onSave(f)}>💾 Salvar</button>
+          <button className="btn btn-primary" onClick={handleSave}>💾 Salvar</button>
         </div>
       </div>
     </div>
@@ -501,7 +524,7 @@ function EpisPage({ epis, setEpis, toast }) {
                 </div>
               </div>
               <div className="epi-name">{e.nome}</div>
-              <div className="epi-ca">{e.ca} · {e.categoria}</div>
+              <div className="epi-ca">{(() => { try { if (e.cas_json) return JSON.parse(e.cas_json).map((c:any) => c.numero).filter(Boolean).join(" · "); } catch {} return e.ca || ""; })()} · {e.categoria}</div>
               <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4, fontFamily: "IBM Plex Mono" }}>
                 🔄 Troca: a cada {e.periodicidade}d · {e.fabricante}
               </div>
@@ -516,7 +539,7 @@ function EpisPage({ epis, setEpis, toast }) {
       </div>
       {(editEpi || addModal) && (
         <EpiModal
-          epi={editEpi || { nome: "", ca: "", categoria: "Proteção da Cabeça", estoque: 0, minimo: 0, validade: "", img: "🪖", periodicidade: 90, descricao: "", norma: "", fabricante: "" }}
+          epi={editEpi || { nome: "", ca: "", cas_json: null, categoria: "Proteção da Cabeça", estoque: 0, minimo: 0, validade: "", img: "🪖", periodicidade: 90, descricao: "", norma: "", fabricante: "" }}
           onClose={() => { setEditEpi(null); setAddModal(false); }}
           onSave={saveEpi}
           onDelete={editEpi ? () => setConfirmDel(editEpi) : null}
@@ -793,12 +816,164 @@ function CameraCapture({ onCapture, onCancel }: { onCapture: (base64: string) =>
 
   return (
     <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", background: "#000" }}>
-      <video ref={videoRef} autoPlay muted playsInline style={{ width: "100%", display: "block", maxHeight: 280 }} />
+      <video ref={videoRef} autoPlay muted playsInline style={{ width: "100%", display: "block", maxHeight: 280, transform: "scaleX(-1)" }} />
       <canvas ref={canvasRef} style={{ display: "none" }} />
       <div className="face-guide" />
       <div style={{ position: "absolute", bottom: 12, left: 0, right: 0, display: "flex", gap: 8, justifyContent: "center" }}>
         <button className="btn btn-ghost" onClick={() => { stopStream(); onCancel(); }}>Cancelar</button>
         <button className="btn btn-primary" disabled={!ready} onClick={capture}>📸 Capturar</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── LIVENESS CAPTURE ─────────────────────────────────────────────────────────
+const LIVENESS_TIMEOUT = 12;
+const PEAK_WINDOW      = 20;   // frames (~2s) para rastrear pico de EAR (olhos bem abertos)
+const CLOSED_RATIO     = 0.75; // fechado = EAR cai para 75% do pico
+const OPEN_RATIO       = 0.88; // aberto  = EAR volta a 88% do pico → piscar confirmado
+
+function LivenessCapture({ onCapture, onCancel }: { onCapture: (b: string) => void; onCancel: () => void }) {
+  const videoRef    = useRef<HTMLVideoElement>(null);
+  const canvasRef   = useRef<HTMLCanvasElement>(null);
+  const streamRef   = useRef<MediaStream | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const earHistory  = useRef<number[]>([]);  // últimos N frames para calcular pico
+  const eyesClosed  = useRef(false);
+
+  type Stage = "loading" | "challenge" | "blink" | "success" | "timeout" | "error";
+  const [stage, setStage]        = useState<Stage>("loading");
+  const [timeLeft, setTimeLeft]  = useState(LIVENESS_TIMEOUT);
+  const [faceFound, setFaceFound] = useState(false);
+  const [dropPct, setDropPct]    = useState<number | null>(null); // % de queda atual
+
+  const stopIntervals = () => {
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    if (timerRef.current)    { clearInterval(timerRef.current);    timerRef.current    = null; }
+  };
+  const stopStream = () => { streamRef.current?.getTracks().forEach(t => t.stop()); streamRef.current = null; };
+  const cleanup    = () => { stopIntervals(); stopStream(); };
+
+  const captureFrame = () => {
+    const v = videoRef.current, c = canvasRef.current;
+    if (!v || !c) return;
+    c.width = v.videoWidth || 640; c.height = v.videoHeight || 480;
+    c.getContext("2d")!.drawImage(v, 0, 0);
+    cleanup();
+    onCapture(c.toDataURL("image/jpeg", 0.85));
+  };
+
+  const startAnalysis = () => {
+    earHistory.current = [];
+    eyesClosed.current = false;
+    setDropPct(null);
+    setFaceFound(false);
+    setStage("challenge");
+
+    let remaining = LIVENESS_TIMEOUT;
+    setTimeLeft(remaining);
+
+    timerRef.current = setInterval(() => {
+      remaining--;
+      setTimeLeft(remaining);
+      if (remaining <= 0) { stopIntervals(); stopStream(); setStage("timeout"); }
+    }, 1000);
+
+    intervalRef.current = setInterval(async () => {
+      const v = videoRef.current;
+      if (!v || v.readyState < 2) return;
+      try {
+        const lm = await detectLandmarks(v);
+        if (!lm) { setFaceFound(false); return; }
+        setFaceFound(true);
+        const ear = computeEAR(lm);
+
+        // janela deslizante para rastrear o pico (olhos abertos)
+        earHistory.current.push(ear);
+        if (earHistory.current.length > PEAK_WINDOW) earHistory.current.shift();
+
+        // precisa de pelo menos 4 frames para ter um pico confiável
+        if (earHistory.current.length < 4) return;
+
+        // pico = máximo dos frames recentes (representa olhos bem abertos)
+        const peak = Math.max(...earHistory.current);
+        const ratio = ear / peak;
+        setDropPct(Math.round((1 - ratio) * 100));
+
+        if (ratio < CLOSED_RATIO) {
+          eyesClosed.current = true;
+          setStage("blink");
+        } else if (ratio >= OPEN_RATIO && eyesClosed.current) {
+          eyesClosed.current = false;
+          stopIntervals();
+          setStage("success");
+          setTimeout(captureFrame, 400);
+        } else if (!eyesClosed.current) {
+          setStage("challenge");
+        }
+      } catch { /* frame descartado */ }
+    }, 100);
+  };
+
+  const startCamera = () => {
+    stopIntervals();
+    stopStream();
+    setStage("loading");
+    if (!navigator.mediaDevices?.getUserMedia) { setStage("error"); return; }
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } })
+      .then(stream => {
+        streamRef.current = stream;
+        if (videoRef.current) videoRef.current.srcObject = stream;
+        setTimeout(startAnalysis, 800);
+      })
+      .catch(() => setStage("error"));
+  };
+
+  useEffect(() => { startCamera(); return cleanup; }, []);
+
+  const stageInfo: Record<Stage, { icon: string; text: string; color: string }> = {
+    loading:   { icon: "⏳", text: "Iniciando câmera...",                                              color: "var(--text3)"  },
+    challenge: { icon: faceFound ? "👁" : "😶", text: faceFound ? "Pisque os olhos" : "Posicione seu rosto na câmera", color: faceFound ? "var(--orange)" : "var(--text3)" },
+    blink:     { icon: "😌", text: "Olhos fechados...",                                               color: "var(--orange)" },
+    success:   { icon: "✅", text: "Vida confirmada!",                                                color: "var(--green)"  },
+    timeout:   { icon: "⏱", text: "Tempo esgotado.",                                                 color: "var(--red)"    },
+    error:     { icon: "📷", text: "Câmera não disponível (requer HTTPS).",                           color: "var(--red)"    },
+  };
+  const info = stageInfo[stage];
+
+  return (
+    <div style={{ borderRadius: 10, overflow: "hidden", background: "#000", position: "relative" }}>
+      <video ref={videoRef} autoPlay muted playsInline style={{ width: "100%", display: "block", maxHeight: 280, transform: "scaleX(-1)" }} />
+      <canvas ref={canvasRef} style={{ display: "none" }} />
+      <div className="face-guide" />
+      {/* HUD */}
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", background: "rgba(0,0,0,0.55)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 20 }}>{info.icon}</span>
+          <span style={{ fontSize: 12, color: info.color, fontFamily: "IBM Plex Mono" }}>{info.text}</span>
+        </div>
+        {(stage === "challenge" || stage === "blink") && (
+          <span style={{ fontFamily: "IBM Plex Mono", fontSize: 13, color: timeLeft <= 3 ? "var(--red)" : "var(--text2)", fontWeight: 700 }}>{timeLeft}s</span>
+        )}
+      </div>
+      {/* barra de queda de EAR */}
+      {dropPct !== null && (stage === "challenge" || stage === "blink") && (
+        <div style={{ position: "absolute", bottom: 48, left: 14, right: 14 }}>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontFamily: "IBM Plex Mono", marginBottom: 3 }}>
+            fechamento dos olhos {dropPct > 0 ? `−${dropPct}%` : ""}
+          </div>
+          <div style={{ height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 2, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${Math.min(100, dropPct * 5)}%`, background: stage === "blink" ? "var(--orange)" : "var(--green)", transition: "width 0.08s" }} />
+          </div>
+        </div>
+      )}
+      <div style={{ position: "absolute", bottom: 10, left: 0, right: 0, display: "flex", gap: 8, justifyContent: "center" }}>
+        <button className="btn btn-ghost" onClick={() => { cleanup(); onCancel(); }}>Cancelar</button>
+        {(stage === "timeout" || stage === "error") && (
+          <button className="btn btn-primary" onClick={startCamera}>Tentar novamente</button>
+        )}
       </div>
     </div>
   );
@@ -1400,9 +1575,9 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
 
   const steps = ["Funcionário","Itens","Confirmar","Assinar","Recibo"];
 
-  const toggleEpi = (id) => {
-    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-    setQtds(prev => ({ ...prev, [id]: prev[id] || 1 }));
+  const toggleEpi = (key: string) => {
+    setSelected(prev => prev.includes(key) ? prev.filter(x => x !== key) : [...prev, key]);
+    setQtds(prev => ({ ...prev, [key]: prev[key] || 1 }));
   };
 
   const startSign = () => {
@@ -1416,7 +1591,7 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
         clearInterval(iv); setSigProgress(100);
         setTimeout(() => {
           const confianca = sigType === "facial" ? faceScore : sigType === "digital" ? +(92 + Math.random() * 7).toFixed(1) : null;
-          const itens = epis.filter(e => selected.includes(e.id)).map(e => ({ epi_id: e.id, nome: e.nome, img: e.img, qtd: qtds[e.id] || 1 }));
+          const itens = selEpis.map(e => ({ epi_id: e.id, nome: e.nome, img: e.img, ca: e.ca, qtd: qtds[e.itemKey] || 1 }));
           setEntregas(prev => [{ id: newId, funcionario_id: func.id, funcionario: func.nome, data: new Date().toISOString().split("T")[0], itens, status: "assinado", tipo_assinatura: sigType, confianca }, ...prev]);
           setSigning(false); setDone(true); setStep(4);
           toast("Entrega registrada e assinada!", "success");
@@ -1445,7 +1620,14 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
   const stopDraw = () => { drawing.current = false; };
   const clearSig = () => { const c = canvasRef.current; c?.getContext("2d").clearRect(0, 0, c.width, c.height); setHasSig(false); };
 
-  const selEpis = epis.filter(e => selected.includes(e.id));
+  const parseCas = (epi: any) => {
+    try { if (epi.cas_json) return JSON.parse(epi.cas_json); } catch {}
+    return epi.ca ? [{ numero: epi.ca, validade: epi.validade || "" }] : [];
+  };
+  const epiCaItems = epis.flatMap(epi =>
+    parseCas(epi).map((ca: any, i: number) => ({ ...epi, itemKey: `${epi.id}:${i}`, ca: ca.numero, validade: ca.validade }))
+  );
+  const selEpis = epiCaItems.filter(item => selected.includes(item.itemKey));
 
   const exportarFicha = () => {
     const doc = new jsPDF({ unit: "mm", format: "a4" });
@@ -1536,7 +1718,7 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
     // Linhas da tabela
     selEpis.forEach((epi) => {
       const proxTroca = fmtDate(addDays(new Date().toISOString().split("T")[0], epi.periodicidade));
-      const row = [epi.nome, epi.ca, `${qtds[epi.id] || 1} un`, proxTroca];
+      const row = [epi.nome, epi.ca, `${qtds[epi.itemKey] || 1} un`, proxTroca];
       doc.setDrawColor(220, 220, 220);
       doc.line(margin, y + 3, pageW - margin, y + 3);
       colX = margin;
@@ -1569,7 +1751,7 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
             <div><div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginBottom: 4 }}>ASSINATURA</div><div style={{ fontWeight: 600 }}>{sigType === "facial" ? "👤 Facial" : sigType === "digital" ? "👆 Digital" : "✍️ Manual"}</div></div>
           </div>
           <table><thead><tr><th>EPI</th><th>CA</th><th>Qtd</th><th>Próxima Troca</th></tr></thead>
-            <tbody>{selEpis.map(e => (<tr key={e.id}><td><span style={{ marginRight: 6 }}>{e.img}</span>{e.nome}</td><td><span className="tag">{e.ca}</span></td><td>{qtds[e.id] || 1} un</td><td style={{ fontFamily: "IBM Plex Mono", fontSize: 11, color: "var(--orange)" }}>{fmtDate(addDays(new Date().toISOString().split("T")[0], e.periodicidade))}</td></tr>))}</tbody>
+            <tbody>{selEpis.map(e => (<tr key={e.itemKey}><td><span style={{ marginRight: 6 }}>{e.img}</span>{e.nome}</td><td><span className="tag">{e.ca}</span></td><td>{qtds[e.itemKey] || 1} un</td><td style={{ fontFamily: "IBM Plex Mono", fontSize: 11, color: "var(--orange)" }}>{fmtDate(addDays(new Date().toISOString().split("T")[0], e.periodicidade))}</td></tr>))}</tbody>
           </table>
         </div>
       </div>
@@ -1604,18 +1786,18 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
       {step === 1 && (
         <div>
           <div className="epi-grid">
-            {epis.map(e => {
-              const sel = selected.includes(e.id);
+            {epiCaItems.map(item => {
+              const sel = selected.includes(item.itemKey);
               return (
-                <div key={e.id} className="epi-card" style={{ border: sel ? "1px solid var(--orange)" : undefined, background: sel ? "var(--orange-dim)" : undefined }} onClick={() => toggleEpi(e.id)}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}><div className="epi-icon">{e.img}</div>{sel && <span className="badge badge-orange">✓</span>}</div>
-                  <div className="epi-name">{e.nome}</div>
-                  <div className="epi-ca">{e.ca}</div>
-                  <div style={{ fontSize: 11, color: "var(--orange)", marginTop: 4, fontFamily: "IBM Plex Mono" }}>🔄 Troca: {e.periodicidade}d</div>
+                <div key={item.itemKey} className="epi-card" style={{ border: sel ? "1px solid var(--orange)" : undefined, background: sel ? "var(--orange-dim)" : undefined }} onClick={() => toggleEpi(item.itemKey)}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><div className="epi-icon">{item.img}</div>{sel && <span className="badge badge-orange">✓</span>}</div>
+                  <div className="epi-name">{item.nome}</div>
+                  <div className="epi-ca">{item.ca}</div>
+                  <div style={{ fontSize: 11, color: "var(--orange)", marginTop: 4, fontFamily: "IBM Plex Mono" }}>🔄 Troca: {item.periodicidade}d</div>
                   {sel && (<div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }} onClick={ev => ev.stopPropagation()}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setQtds(p => ({ ...p, [e.id]: Math.max(1, (p[e.id]||1)-1) }))}>−</button>
-                    <span style={{ fontFamily: "IBM Plex Mono", fontWeight: 700 }}>{qtds[e.id]||1}</span>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setQtds(p => ({ ...p, [e.id]: (p[e.id]||1)+1 }))}>+</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setQtds(p => ({ ...p, [item.itemKey]: Math.max(1, (p[item.itemKey]||1)-1) }))}>−</button>
+                    <span style={{ fontFamily: "IBM Plex Mono", fontWeight: 700 }}>{qtds[item.itemKey]||1}</span>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setQtds(p => ({ ...p, [item.itemKey]: (p[item.itemKey]||1)+1 }))}>+</button>
                   </div>)}
                 </div>
               );
@@ -1633,7 +1815,7 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
           <div className="card-header"><span className="card-title">Confirmação</span></div>
           <div className="card-body">
             <table><thead><tr><th>EPI</th><th>CA</th><th>Qtd</th><th>Próx. Troca</th></tr></thead>
-              <tbody>{selEpis.map(e => (<tr key={e.id}><td><span style={{ marginRight: 6 }}>{e.img}</span>{e.nome}</td><td><span className="tag">{e.ca}</span></td><td>{qtds[e.id]||1} un</td><td style={{ fontFamily: "IBM Plex Mono", fontSize: 11, color: "var(--orange)" }}>{fmtDate(addDays(new Date().toISOString().split("T")[0], e.periodicidade))}</td></tr>))}</tbody>
+              <tbody>{selEpis.map(e => (<tr key={e.itemKey}><td><span style={{ marginRight: 6 }}>{e.img}</span>{e.nome}</td><td><span className="tag">{e.ca}</span></td><td>{qtds[e.itemKey]||1} un</td><td style={{ fontFamily: "IBM Plex Mono", fontSize: 11, color: "var(--orange)" }}>{fmtDate(addDays(new Date().toISOString().split("T")[0], e.periodicidade))}</td></tr>))}</tbody>
             </table>
           </div>
           <div className="modal-footer">
@@ -1703,7 +1885,7 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
               )}
 
               {sigType === "facial" && faceStage === "capture" && (
-                <CameraCapture onCapture={handleFaceCapture} onCancel={() => setFaceStage("idle")} />
+                <LivenessCapture onCapture={handleFaceCapture} onCancel={() => setFaceStage("idle")} />
               )}
 
               {sigType === "facial" && faceStage === "verifying" && (
@@ -2351,9 +2533,9 @@ export default function App() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              nome: novoEpi.nome, ca: novoEpi.ca, categoria: novoEpi.categoria,
-              estoque: novoEpi.estoque, minimo: novoEpi.minimo, validade: novoEpi.validade,
-              img: novoEpi.img, periodicidade: novoEpi.periodicidade,
+              nome: novoEpi.nome, ca: novoEpi.ca, cas_json: novoEpi.cas_json ?? null,
+              categoria: novoEpi.categoria, estoque: novoEpi.estoque, minimo: novoEpi.minimo,
+              validade: novoEpi.validade, img: novoEpi.img, periodicidade: novoEpi.periodicidade,
               descricao: novoEpi.descricao, norma: novoEpi.norma, fabricante: novoEpi.fabricante
             })
           })

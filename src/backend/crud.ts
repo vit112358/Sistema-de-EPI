@@ -5,6 +5,7 @@ export interface EntregaItem {
     nome: string;
     img: string;
     qtd: number;
+    ca?: string;
 }
 
 export interface Entrega {
@@ -36,9 +37,9 @@ export function criarEntrega(entrega: Entrega): Promise<number> {
             const entregaId = this.lastID;
 
             if (entrega.itens && entrega.itens.length > 0) {
-                const stmt = db.prepare(`INSERT INTO entrega_itens (entrega_id, epi_id, nome, img, qtd) VALUES (?, ?, ?, ?, ?)`);
+                const stmt = db.prepare(`INSERT INTO entrega_itens (entrega_id, epi_id, nome, img, qtd, ca) VALUES (?, ?, ?, ?, ?, ?)`);
                 entrega.itens.forEach(item => {
-                    stmt.run(entregaId, item.epi_id, item.nome, item.img, item.qtd);
+                    stmt.run(entregaId, item.epi_id, item.nome, item.img, item.qtd, item.ca ?? null);
                 });
                 stmt.finalize();
 
@@ -213,6 +214,7 @@ export interface Epi {
     id?: number;
     nome: string;
     ca?: string;
+    cas_json?: string;
     categoria?: string;
     estoque: number;
     minimo: number;
@@ -227,10 +229,10 @@ export interface Epi {
 // CREATE EPI
 export function criarEpi(epi: Epi): Promise<number> {
     return new Promise((resolve, reject) => {
-        const sql = `INSERT INTO epis (nome, ca, categoria, estoque, minimo, validade, img, periodicidade, descricao, norma, fabricante) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        const sql = `INSERT INTO epis (nome, ca, cas_json, categoria, estoque, minimo, validade, img, periodicidade, descricao, norma, fabricante) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         db.run(sql, [
-            epi.nome, epi.ca, epi.categoria, epi.estoque, epi.minimo,
-            epi.validade, epi.img, epi.periodicidade, epi.descricao, epi.norma, epi.fabricante
+            epi.nome, epi.ca ?? null, epi.cas_json ?? null, epi.categoria, epi.estoque, epi.minimo,
+            epi.validade ?? null, epi.img, epi.periodicidade, epi.descricao, epi.norma, epi.fabricante
         ], function (err) {
             if (err) return reject(err);
             resolve(this.lastID);
@@ -252,10 +254,10 @@ export function listarEpis(): Promise<Epi[]> {
 // UPDATE EPI
 export function atualizarEpi(id: number, dados: Partial<Epi>): Promise<void> {
     return new Promise((resolve, reject) => {
-        const sql = `UPDATE epis SET nome = ?, ca = ?, categoria = ?, estoque = ?, minimo = ?, validade = ?, img = ?, periodicidade = ?, descricao = ?, norma = ?, fabricante = ? WHERE id = ?`;
+        const sql = `UPDATE epis SET nome = ?, ca = ?, cas_json = ?, categoria = ?, estoque = ?, minimo = ?, validade = ?, img = ?, periodicidade = ?, descricao = ?, norma = ?, fabricante = ? WHERE id = ?`;
         db.run(sql, [
-            dados.nome, dados.ca, dados.categoria, dados.estoque, dados.minimo,
-            dados.validade, dados.img, dados.periodicidade, dados.descricao, dados.norma, dados.fabricante,
+            dados.nome, dados.ca ?? null, dados.cas_json ?? null, dados.categoria, dados.estoque, dados.minimo,
+            dados.validade ?? null, dados.img, dados.periodicidade, dados.descricao, dados.norma, dados.fabricante,
             id
         ], function (err) {
             if (err) reject(err);
