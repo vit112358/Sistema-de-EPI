@@ -321,6 +321,57 @@ export function deletarCargo(id: number): Promise<void> {
     });
 }
 
+// ── USUÁRIOS ─────────────────────────────────────────────────────────────────
+
+export interface Usuario {
+    id?: number;
+    nome: string;
+    username: string;
+    senha: string;
+    role: string;
+}
+
+export function listarUsuarios(): Promise<Usuario[]> {
+    return new Promise((resolve, reject) => {
+        db.all(`SELECT * FROM usuarios ORDER BY id ASC`, [], (err, rows: any[]) => {
+            if (err) reject(err); else resolve(rows);
+        });
+    });
+}
+
+export function criarUsuario(u: Usuario): Promise<number> {
+    return new Promise((resolve, reject) => {
+        db.run(`INSERT INTO usuarios (nome, username, senha, role) VALUES (?, ?, ?, ?)`,
+            [u.nome, u.username, u.senha, u.role], function (err) {
+                if (err) reject(err); else resolve(this.lastID);
+            });
+    });
+}
+
+export function atualizarUsuario(id: number, dados: Partial<Usuario>): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const fields: string[] = [];
+        const values: any[] = [];
+        if (dados.nome !== undefined)     { fields.push('nome = ?');     values.push(dados.nome); }
+        if (dados.username !== undefined) { fields.push('username = ?'); values.push(dados.username); }
+        if (dados.senha !== undefined)    { fields.push('senha = ?');    values.push(dados.senha); }
+        if (dados.role !== undefined)     { fields.push('role = ?');     values.push(dados.role); }
+        if (fields.length === 0) return resolve();
+        values.push(id);
+        db.run(`UPDATE usuarios SET ${fields.join(', ')} WHERE id = ?`, values, function (err) {
+            if (err) reject(err); else resolve();
+        });
+    });
+}
+
+export function deletarUsuario(id: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+        db.run(`DELETE FROM usuarios WHERE id = ?`, [id], function (err) {
+            if (err) reject(err); else resolve();
+        });
+    });
+}
+
 // CREATE Biometria
 export function salvarBiometria(b: Biometria): Promise<number> {
     return new Promise((resolve, reject) => {

@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo} from './crud.ts';
+import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario} from './crud.ts';
 
 const app = express();
 const PORT = 3000;
@@ -184,4 +184,31 @@ app.delete('/api/biometrias/:id', async (req, res) => {
         console.error('Erro ao deletar biometria:', error);
         res.status(500).json({ error: 'Erro ao deletar biometria' });
     }
+});
+
+// Rotas Usuários
+app.get('/api/users', async (req, res) => {
+    try { res.json(await listarUsuarios()); }
+    catch (error) { res.status(500).json({ error: 'Erro ao buscar usuários' }); }
+});
+
+app.post('/api/users', async (req, res) => {
+    try {
+        const id = await criarUsuario(req.body);
+        res.status(201).json({ id, ...req.body });
+    } catch (error) { res.status(500).json({ error: 'Erro ao criar usuário' }); }
+});
+
+app.put('/api/users/:id', async (req, res) => {
+    try {
+        await atualizarUsuario(parseInt(req.params.id), req.body);
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ error: 'Erro ao atualizar usuário' }); }
+});
+
+app.delete('/api/users/:id', async (req, res) => {
+    try {
+        await deletarUsuario(parseInt(req.params.id));
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ error: 'Erro ao deletar usuário' }); }
 });

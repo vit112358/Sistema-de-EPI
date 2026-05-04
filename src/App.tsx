@@ -14,40 +14,6 @@ const INIT_USERS = [
   { id: 1, nome: "Administrador", username: "admin", senha: "admin123", role: "admin" },
 ];
 
-const INIT_EPIS = [
-  { id: 1, nome: "Capacete de Segurança", ca: "CA-12345", categoria: "Proteção da Cabeça", estoque: 45, minimo: 10, validade: "2026-12-01", img: "🪖", periodicidade: 365, descricao: "Capacete classe B, cor amarela, com carneira regulável", norma: "NBR 8221", fabricante: "3M do Brasil" },
-  { id: 2, nome: "Luva de Raspa", ca: "CA-22110", categoria: "Proteção das Mãos", estoque: 8, minimo: 20, validade: "2025-06-15", img: "🧤", periodicidade: 90, descricao: "Luva de couro raspa boi, cano curto 15cm", norma: "NBR 13.921", fabricante: "Kalipso" },
-  { id: 3, nome: "Bota de Segurança", ca: "CA-33890", categoria: "Proteção dos Pés", estoque: 22, minimo: 15, validade: "2027-03-10", img: "🥾", periodicidade: 180, descricao: "Bota PVC cano médio, biqueira de aço, solado antiderrapante", norma: "NBR 14835", fabricante: "Bracol" },
-  { id: 4, nome: "Óculos de Proteção", ca: "CA-44561", categoria: "Proteção Visual", estoque: 60, minimo: 25, validade: "2026-08-20", img: "🥽", periodicidade: 180, descricao: "Óculos ampla visão, lente incolor, antirrisco e antiembaçante", norma: "NBR 15011", fabricante: "Uvex" },
-  { id: 5, nome: "Protetor Auricular", ca: "CA-55230", categoria: "Proteção Auditiva", estoque: 3, minimo: 30, validade: "2025-12-31", img: "🔇", periodicidade: 30, descricao: "Protetor auditivo espuma descartável, NRR-SF 26dB", norma: "NBR 10657", fabricante: "3M do Brasil" },
-  { id: 6, nome: "Colete Refletivo", ca: "CA-66780", categoria: "Sinalização", estoque: 18, minimo: 12, validade: "2026-05-01", img: "🦺", periodicidade: 365, descricao: "Colete refletivo laranja, faixas de 5cm em prata, classe 2", norma: "NBR 15292", fabricante: "Omni" },
-];
-
-const INIT_CARGOS = [
-  { id: 1, nome: "Operador de Máquina" },
-  { id: 2, nome: "Técnico de Manutenção" },
-  { id: 3, nome: "Auxiliar de Logística" },
-  { id: 4, nome: "Inspetor de Qualidade" },
-  { id: 5, nome: "Técnico de Segurança" },
-];
-
-const INIT_FUNCIONARIOS = [
-  { id: 1, nome: "Carlos Eduardo Silva", matricula: "F001", setor: "Produção", cargo: "Operador de Máquina", email: "carlos@empresa.com", telefone: "(11) 99999-0001", admissao: "2022-03-15", biometrias: [{ tipo: "facial", data: "2024-01-10", qualidade: 94.2 }, { tipo: "digital", data: "2024-01-10", qualidade: 98.1 }] },
-  { id: 2, nome: "Ana Paula Ferreira", matricula: "F002", setor: "Manutenção", cargo: "Técnica de Manutenção", email: "ana@empresa.com", telefone: "(11) 99999-0002", admissao: "2021-07-01", biometrias: [{ tipo: "facial", data: "2024-02-05", qualidade: 91.7 }] },
-  { id: 3, nome: "Roberto Mendes Costa ", matricula: "F003", setor: "Logística", cargo: "Auxiliar de Logística", email: "roberto@empresa.com", telefone: "(11) 99999-0003", admissao: "2023-01-10", biometrias: [] },
-  { id: 4, nome: "Fernanda Lima Souza", matricula: "F004", setor: "Qualidade", cargo: "Inspetora de Qualidade", email: "fernanda@empresa.com", telefone: "(11) 99999-0004", admissao: "2020-11-20", biometrias: [{ tipo: "digital", data: "2024-03-01", qualidade: 97.3 }] },
-  { id: 5, nome: "Marcos Antônio Rocha", matricula: "F005", setor: "Segurança", cargo: "Técnico de Segurança", email: "marcos@empresa.com", telefone: "(11) 99999-0005", admissao: "2019-05-15", biometrias: [] },
-];
-
-const INIT_ENTREGAS = [
-  { id: 1, funcionario_id: 1, funcionario: "Carlos Eduardo Silva", data: "2025-01-15", itens: [{ epi_id: 1, nome: "Capacete de Segurança", img: "🪖", qtd: 1 }, { epi_id: 4, nome: "Óculos de Proteção", img: "🥽", qtd: 1 }, { epi_id: 6, nome: "Colete Refletivo", img: "🦺", qtd: 1 }], status: "assinado", tipo_assinatura: "facial", confianca: 94.2 },
-  { id: 2, funcionario_id: 2, funcionario: "Ana Paula Ferreira", data: "2025-01-28", itens: [{ epi_id: 2, nome: "Luva de Raspa", img: "🧤", qtd: 2 }, { epi_id: 3, nome: "Bota de Segurança", img: "🥾", qtd: 1 }], status: "assinado", tipo_assinatura: "digital", confianca: 98.7 },
-  { id: 3, funcionario_id: 3, funcionario: "Roberto Mendes Costa", data: "2025-02-25", itens: [{ epi_id: 5, nome: "Protetor Auricular", img: "🔇", qtd: 4 }, { epi_id: 2, nome: "Luva de Raspa", img: "🧤", qtd: 2 }], status: "pendente_assinatura", tipo_assinatura: null, confianca: null },
-  { id: 4, funcionario_id: 4, funcionario: "Fernanda Lima Souza", data: "2024-10-20", itens: [{ epi_id: 4, nome: "Óculos de Proteção", img: "🥽", qtd: 1 }], status: "assinado", tipo_assinatura: "manual", confianca: null },
-  { id: 5, funcionario_id: 5, funcionario: "Marcos Antônio Rocha", data: "2025-02-15", itens: [{ epi_id: 1, nome: "Capacete de Segurança", img: "🪖", qtd: 1 }, { epi_id: 3, nome: "Bota de Segurança", img: "🥾", qtd: 1 }, { epi_id: 6, nome: "Colete Refletivo", img: "🦺", qtd: 1 }, { epi_id: 4, nome: "Óculos de Proteção", img: "🥽", qtd: 1 }, { epi_id: 2, nome: "Luva de Raspa", img: "🧤", qtd: 2 }], status: "cancelado", tipo_assinatura: null, confianca: null },
-  { id: 6, funcionario_id: 1, funcionario: "Carlos Eduardo Silva", data: "2024-08-10", itens: [{ epi_id: 2, nome: "Luva de Raspa", img: "🧤", qtd: 2 }], status: "assinado", tipo_assinatura: "digital", confianca: 96.5 },
-];
-
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700;800;900&family=IBM+Plex+Mono:wght@300;400;500&family=Barlow:wght@300;400;500;600&display=swap');
@@ -1051,6 +1017,16 @@ function BiometriaPage({ funcionarios, setFuncionarios, toast }) {
     setConfirm(null);
   };
 
+  if (funcionarios.length === 0) return (
+    <div className="card">
+      <div className="card-body" style={{ textAlign: "center", padding: 40 }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>👥</div>
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>Nenhum funcionário cadastrado</div>
+        <div style={{ fontSize: 13, color: "var(--text3)" }}>Cadastre um funcionário antes de registrar biometrias.</div>
+      </div>
+    </div>
+  );
+
   if (tab === "gerenciar") return (
     <div>
       <div className="tab-bar">
@@ -1488,6 +1464,7 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
   const canvasRef = useRef(null);
   const drawing = useRef(false);
   const [hasSig, setHasSig] = useState(false);
+  const [sigImageUrl, setSigImageUrl] = useState<string|null>(null);
 
   // ── facial verification states ──
   const [faceStage, setFaceStage] = useState<"idle"|"capture"|"verifying"|"result">("idle");
@@ -1583,6 +1560,23 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
   const startSign = () => {
     if (sigType === "facial" && faceStage !== "result") return;
     if (!sigType || (sigType === "manual" && !hasSig)) return;
+
+    // Capture signature image before any state changes unmount the canvas
+    if (sigType === "manual" && canvasRef.current) {
+      const c = canvasRef.current as HTMLCanvasElement;
+      const tmp = document.createElement("canvas");
+      tmp.width = c.width; tmp.height = c.height;
+      const ctx = tmp.getContext("2d")!;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, tmp.width, tmp.height);
+      ctx.drawImage(c, 0, 0);
+      setSigImageUrl(tmp.toDataURL("image/png"));
+    } else if (sigType === "facial") {
+      setSigImageUrl(facePhoto);
+    } else {
+      setSigImageUrl(null);
+    }
+
     setSigning(true); setSigProgress(0);
     let p = 0;
     const iv = setInterval(() => {
@@ -1678,19 +1672,62 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
     doc.text(`Data: ${dataHoje}`, margin, y);
     y += 16;
 
-    // Campo de assinatura centralizado
+    // Campo de assinatura
     const sigLineW = 80;
     const sigLineX = (pageW - sigLineW) / 2;
-    doc.setDrawColor(0, 0, 0);
-    doc.line(sigLineX, y, sigLineX + sigLineW, y);
-    y += 5;
-    doc.setFontSize(9);
-    doc.text(nomeFuncionario, pageW / 2, y, { align: "center" });
-    y += 4;
-    doc.setTextColor(100, 100, 100);
-    doc.text("Assinatura do Funcionário", pageW / 2, y, { align: "center" });
-    doc.setTextColor(0, 0, 0);
-    y += 14;
+
+    if (sigImageUrl && sigType === "manual") {
+      // Desenho acima da linha de assinatura
+      const imgH = Math.round(sigLineW * 110 / 480);
+      doc.addImage(sigImageUrl, "PNG", sigLineX, y, sigLineW, imgH);
+      y += imgH;
+      doc.setDrawColor(0, 0, 0);
+      doc.line(sigLineX, y, sigLineX + sigLineW, y);
+      y += 5;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(nomeFuncionario, pageW / 2, y, { align: "center" });
+      y += 4;
+      doc.setTextColor(100, 100, 100);
+      doc.text("Assinatura do Funcionário", pageW / 2, y, { align: "center" });
+      doc.setTextColor(0, 0, 0);
+      y += 14;
+    } else if (sigImageUrl && sigType === "facial") {
+      // Foto à esquerda + texto de identificação
+      const photoSize = 16;
+      doc.addImage(sigImageUrl, "JPEG", sigLineX, y, photoSize, photoSize);
+      const textX = sigLineX + photoSize + 4;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text("Assinado biometricamente por", textX, y + 5);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      doc.text(nomeFuncionario, textX, y + 12);
+      doc.setFont("helvetica", "normal");
+      y += photoSize + 3;
+      doc.setDrawColor(0, 0, 0);
+      doc.line(sigLineX, y, sigLineX + sigLineW, y);
+      y += 5;
+      doc.setFontSize(9);
+      doc.setTextColor(100, 100, 100);
+      doc.text("Assinatura do Funcionário", pageW / 2, y, { align: "center" });
+      doc.setTextColor(0, 0, 0);
+      y += 14;
+    } else {
+      // Digital ou sem imagem — linha padrão
+      doc.setDrawColor(0, 0, 0);
+      doc.line(sigLineX, y, sigLineX + sigLineW, y);
+      y += 5;
+      doc.setFontSize(9);
+      doc.text(nomeFuncionario, pageW / 2, y, { align: "center" });
+      y += 4;
+      doc.setTextColor(100, 100, 100);
+      doc.text("Assinatura do Funcionário", pageW / 2, y, { align: "center" });
+      doc.setTextColor(0, 0, 0);
+      y += 14;
+    }
 
     // Linha separadora antes da tabela
     doc.setDrawColor(200, 200, 200);
@@ -1756,7 +1793,7 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
         </div>
       </div>
       <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-        <button className="btn btn-primary" onClick={() => { setStep(0); setFunc(null); setSelected([]); setSigType(null); setDone(false); setHasSig(false); }}>Nova Entrega</button>
+        <button className="btn btn-primary" onClick={() => { setStep(0); setFunc(null); setSelected([]); setSigType(null); setDone(false); setHasSig(false); setSigImageUrl(null); }}>Nova Entrega</button>
         <button className="btn btn-ghost" onClick={() => onNav("entregas")}>Ver Histórico</button>
       </div>
     </div>
@@ -2194,26 +2231,36 @@ function CadastroUsuariosPage({ users, setUsers, currentUser, toast }) {
   const openNew = () => { setForm({ nome: "", username: "", senha: "", role: "operador" }); setEditing(null); setModal(true); };
   const openEdit = (u: any) => { setForm({ ...u, senha: "" }); setEditing(u); setModal(true); };
 
-  const save = () => {
+  const save = async () => {
     if (!form.nome.trim() || !form.username.trim() || (!editing && !form.senha.trim())) {
       toast("Preencha todos os campos obrigatórios", "error"); return;
     }
     const dup = users.find((u: any) => u.username === form.username && u.id !== editing?.id);
     if (dup) { toast("Username já existe", "error"); return; }
-    if (editing) {
-      setUsers((prev: any[]) => prev.map((u: any) => u.id === editing.id ? { ...u, ...form, senha: form.senha || u.senha } : u));
-      toast("Usuário atualizado!", "success");
-    } else {
-      setUsers((prev: any[]) => [...prev, { ...form, id: Date.now() }]);
-      toast("Usuário criado!", "success");
-    }
+    try {
+      if (editing) {
+        const payload: any = { nome: form.nome, username: form.username, role: form.role };
+        if (form.senha) payload.senha = form.senha;
+        await fetch(`/api/users/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        setUsers((prev: any[]) => prev.map((u: any) => u.id === editing.id ? { ...u, ...payload } : u));
+        toast("Usuário atualizado!", "success");
+      } else {
+        const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+        const data = await res.json();
+        setUsers((prev: any[]) => [...prev, { ...form, id: data.id }]);
+        toast("Usuário criado!", "success");
+      }
+    } catch { toast("Erro ao salvar usuário", "error"); }
     setModal(false);
   };
 
-  const del = (u: any) => {
+  const del = async (u: any) => {
     if (u.id === currentUser.id) { toast("Não é possível excluir o usuário atual", "error"); return; }
     const admins = users.filter((x: any) => x.role === "admin");
     if (u.role === "admin" && admins.length === 1) { toast("Deve existir ao menos um administrador", "error"); return; }
+    try {
+      await fetch(`/api/users/${u.id}`, { method: 'DELETE' });
+    } catch { toast("Erro ao remover usuário", "error"); return; }
     setUsers((prev: any[]) => prev.filter((x: any) => x.id !== u.id));
     toast("Usuário removido", "success");
     setConfirm(null);
@@ -2322,11 +2369,18 @@ export default function App() {
   const [showLanding, setShowLanding] = useState(true);
   const [users, setUsers] = useState(INIT_USERS);
   const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    fetch('/api/users')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.length) setUsers(data); })
+      .catch(() => {});
+  }, []);
   const [page, setPage] = useState("dashboard");
-  const [cargos, setCargos] = useState(INIT_CARGOS);
-  const [epis, setEpis] = useState(INIT_EPIS);
-  const [funcionarios, setFuncionarios] = useState(INIT_FUNCIONARIOS);
-  const [entregas, setEntregas] = useState(INIT_ENTREGAS);
+  const [cargos, setCargos] = useState([]);
+  const [epis, setEpis] = useState([]);
+  const [funcionarios, setFuncionarios] = useState([]);
+  const [entregas, setEntregas] = useState([]);
   const { toasts, add: toast } = useToast();
 
   // INTEGRAÇÃO COM O BACKEND: Busca os dados reais quando o login é feito

@@ -80,6 +80,16 @@ const INIT_CARGOS = `
   );
 `;
 
+const INIT_USUARIOS = `
+  CREATE TABLE IF NOT EXISTS usuarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    username TEXT NOT NULL UNIQUE,
+    senha TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'operador'
+  );
+`;
+
 const INIT_EPIS = `
   CREATE TABLE IF NOT EXISTS epis (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,6 +110,18 @@ const INIT_EPIS = `
 // Função para inicializar o banco de dados
 export function inicializarBancoDeDados() {
     db.serialize(() => {
+        db.run(INIT_USUARIOS, (err) => {
+            if (err) { console.error('Erro ao criar tabela de usuarios:', err.message); return; }
+            console.log('Tabela "usuarios" verificada/criada com sucesso.');
+            // seed: garante que sempre exista ao menos um admin
+            db.get(`SELECT COUNT(*) as total FROM usuarios`, [], (_e, row: any) => {
+                if (row?.total === 0) {
+                    db.run(`INSERT INTO usuarios (nome, username, senha, role) VALUES (?, ?, ?, ?)`,
+                        ['Administrador', 'admin', 'admin123', 'admin']);
+                }
+            });
+        });
+
         db.run(INIT_CARGOS, (err) => {
             if (err) console.error('Erro ao criar tabela de cargos:', err.message);
             else console.log('Tabela "cargos" verificada/criada com sucesso.');
