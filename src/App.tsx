@@ -1037,18 +1037,25 @@ function SignModal({ entrega, onClose, onSign }) {
       else setProgress(p);
     }, 150);
   };
+  const getCanvasPos = (e, r, c) => {
+    const src = e.touches ? e.touches[0] : e;
+    return [(src.clientX - r.left) * (c.width / r.width), (src.clientY - r.top) * (c.height / r.height)];
+  };
   const startDraw = (e) => {
     drawing.current = true;
     const c = canvasRef.current, r = c.getBoundingClientRect(), cx = c.getContext("2d");
-    cx.beginPath(); cx.moveTo(e.clientX - r.left, e.clientY - r.top);
+    const [x, y] = getCanvasPos(e, r, c);
+    cx.beginPath(); cx.moveTo(x, y);
   };
   const draw = (e) => {
     if (!drawing.current) return;
+    e.preventDefault?.();
     const c = canvasRef.current, r = c.getBoundingClientRect(), cx = c.getContext("2d");
-    cx.lineTo(e.clientX - r.left, e.clientY - r.top); cx.strokeStyle = "#1a1a2e"; cx.lineWidth = 2; cx.lineCap = "round"; cx.stroke(); setHasSig(true);
+    const [x, y] = getCanvasPos(e, r, c);
+    cx.lineTo(x, y); cx.strokeStyle = "#1a1a2e"; cx.lineWidth = 3; cx.lineCap = "round"; cx.lineJoin = "round"; cx.stroke(); setHasSig(true);
   };
   const stopDraw = () => { drawing.current = false; };
-  const clearSig = () => { canvasRef.current?.getContext("2d").clearRect(0, 0, 460, 120); setHasSig(false); };
+  const clearSig = () => { const c = canvasRef.current; c?.getContext("2d").clearRect(0, 0, c.width, c.height); setHasSig(false); };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -1075,7 +1082,7 @@ function SignModal({ entrega, onClose, onSign }) {
           {sigType === "manual" && (
             <div style={{ marginTop: 14 }}>
               <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 6 }}>Assine abaixo:</div>
-              <canvas ref={canvasRef} className="sig-canvas" width={480} height={110} style={{ width: "100%", display: "block" }} onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw} />
+              <canvas ref={canvasRef} className="sig-canvas" width={480} height={110} style={{ width: "100%", display: "block", touchAction: "none" }} onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw} onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw} />
               <button className="btn btn-ghost btn-sm" style={{ marginTop: 6 }} onClick={clearSig}>Limpar</button>
             </div>
           )}
@@ -1418,17 +1425,25 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
     }, 150);
   };
 
+  const getCanvasPos = (e, r, c) => {
+    const src = e.touches ? e.touches[0] : e;
+    return [(src.clientX - r.left) * (c.width / r.width), (src.clientY - r.top) * (c.height / r.height)];
+  };
   const startDraw = (e) => {
     drawing.current = true;
     const c = canvasRef.current, r = c.getBoundingClientRect(), cx = c.getContext("2d");
-    cx.beginPath(); cx.moveTo(e.clientX - r.left, e.clientY - r.top);
+    const [x, y] = getCanvasPos(e, r, c);
+    cx.beginPath(); cx.moveTo(x, y);
   };
   const draw = (e) => {
     if (!drawing.current) return;
+    e.preventDefault?.();
     const c = canvasRef.current, r = c.getBoundingClientRect(), cx = c.getContext("2d");
-    cx.lineTo(e.clientX - r.left, e.clientY - r.top); cx.strokeStyle = "#1a1a2e"; cx.lineWidth = 2; cx.lineCap = "round"; cx.stroke(); setHasSig(true);
+    const [x, y] = getCanvasPos(e, r, c);
+    cx.lineTo(x, y); cx.strokeStyle = "#1a1a2e"; cx.lineWidth = 3; cx.lineCap = "round"; cx.lineJoin = "round"; cx.stroke(); setHasSig(true);
   };
-  const clearSig = () => { canvasRef.current?.getContext("2d").clearRect(0, 0, 460, 120); setHasSig(false); };
+  const stopDraw = () => { drawing.current = false; };
+  const clearSig = () => { const c = canvasRef.current; c?.getContext("2d").clearRect(0, 0, c.width, c.height); setHasSig(false); };
 
   const selEpis = epis.filter(e => selected.includes(e.id));
 
@@ -1771,8 +1786,8 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
               {sigType === "manual" && (
                 <div style={{ marginTop: 8 }}>
                   <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 8 }}>Assine no campo abaixo:</div>
-                  <canvas ref={canvasRef} width={460} height={120} style={{ background: "#fff", border: "1px solid var(--border2)", borderRadius: 8, cursor: "crosshair", display: "block", width: "100%" }}
-                    onMouseDown={startDraw} onMouseMove={draw} onMouseUp={() => { drawing.current = false; }} onMouseLeave={() => { drawing.current = false; }} />
+                  <canvas ref={canvasRef} width={460} height={120} style={{ background: "#fff", border: "1px solid var(--border2)", borderRadius: 8, cursor: "crosshair", display: "block", width: "100%", touchAction: "none" }}
+                    onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw} onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw} />
                   <button className="btn btn-ghost btn-xs" style={{ marginTop: 6 }} onClick={clearSig}>Limpar</button>
                 </div>
               )}
