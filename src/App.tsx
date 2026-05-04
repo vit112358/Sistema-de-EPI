@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import Landing from "./Landing";
 import { jsPDF } from "jspdf";
+import { loadFaceModels, extractDescriptor, compareDescriptors, descriptorToJson, jsonToDescriptor, isCurrentModelDescriptor, MODEL_VERSION } from "./faceApi";
 
 // ─── CONFIGURAÇÕES DA EMPRESA ─────────────────────────────────────────────────
 const COMPANY_CONFIG = {
@@ -167,6 +168,8 @@ const css = `
   @keyframes facePulse { 0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(1); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.02); } }
   .scan-line { position: absolute; width: 100%; height: 2px; background: linear-gradient(90deg, transparent, var(--orange), transparent); animation: scan 2s linear infinite; }
   @keyframes scan { 0% { top: 20%; } 100% { top: 80%; } }
+  @keyframes indeterminate { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }
+  .bar-indeterminate { width: 40% !important; animation: indeterminate 1.2s ease-in-out infinite; }
   .steps { display: flex; gap: 0; margin-bottom: 24px; }
   .step { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; }
   .step:not(:last-child)::after { content: ''; position: absolute; top: 15px; left: 50%; width: 100%; height: 1px; background: var(--border); }
@@ -811,15 +814,28 @@ function BiometriaPage({ funcionarios, setFuncionarios, toast }) {
   const [done, setDone] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const [lgpdConsent, setLgpdConsent] = useState(false);
 
   useEffect(() => {
     const found = funcionarios.find(f => f.id === func?.id);
     if (found) setFunc(found);
   }, [funcionarios]);
 
-  const saveBiometria = (imagemBase64: string | null = null) => {
+  const saveBiometria = async (imagemBase64: string | null = null) => {
     setCameraActive(false);
     setScanning(true); setProgress(0);
+
+    // extrai descriptor facial antes de iniciar a animação
+    let descriptor_json: string | null = null;
+    if (imagemBase64 && type === "facial") {
+      try {
+        const desc = await extractDescriptor(imagemBase64);
+        if (desc) descriptor_json = descriptorToJson(desc);
+      } catch (e) {
+        console.warn("Falha ao extrair descriptor facial:", e);
+      }
+    }
+
     let p = 0;
     const iv = setInterval(() => {
       p += Math.random() * 12;
@@ -827,8 +843,8 @@ function BiometriaPage({ funcionarios, setFuncionarios, toast }) {
       if (p >= 100) {
         clearInterval(iv);
         setTimeout(async () => {
-          const qualidade = +(90 + Math.random() * 9).toFixed(1);
-          const novaBio = { funcionario_id: func.id, tipo: type, data: new Date().toISOString().split("T")[0], qualidade, imagem_base64: imagemBase64 };
+          const qualidade = descriptor_json ? 99 : +(90 + Math.random() * 9).toFixed(1);
+          const novaBio = { funcionario_id: func.id, tipo: type, data: new Date().toISOString().split("T")[0], qualidade, imagem_base64: imagemBase64, descriptor_json };
           try {
             const res = await fetch('/api/biometrias', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novaBio) });
             const data = await res.json();
@@ -921,7 +937,7 @@ function BiometriaPage({ funcionarios, setFuncionarios, toast }) {
           <div className="card"><div className="card-body" style={{ textAlign: "center", padding: 40 }}>
             <div style={{ fontSize: 60, marginBottom: 16 }}>{type === "facial" ? "👤" : "👆"}</div>
             <div style={{ fontFamily: "Barlow Condensed", fontSize: 24, fontWeight: 800, color: "var(--green)", marginBottom: 16 }}>BIOMETRIA REGISTRADA</div>
-            <button className="btn btn-primary" onClick={() => { setDone(false); setType(null); setProgress(0); }}>Registrar nova</button>
+            <button className="btn btn-primary" onClick={() => { setDone(false); setType(null); setProgress(0); setLgpdConsent(false); }}>Registrar nova</button>
           </div></div>
         </div>
       ) : (
@@ -929,7 +945,7 @@ function BiometriaPage({ funcionarios, setFuncionarios, toast }) {
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-header"><span className="card-title">Funcionário</span></div>
             <div className="card-body">
-              <select className="input" value={func?.id} onChange={e => { setFunc(funcionarios.find(f => f.id === +e.target.value)); setType(null); setDone(false); }}>
+              <select className="input" value={func?.id} onChange={e => { setFunc(funcionarios.find(f => f.id === +e.target.value)); setType(null); setDone(false); setLgpdConsent(false); }}>
                 {funcionarios.map(f => <option key={f.id} value={f.id}>{f.nome} — {f.matricula}</option>)}
               </select>
               {func && func.biometrias.length > 0 && (
@@ -941,14 +957,32 @@ function BiometriaPage({ funcionarios, setFuncionarios, toast }) {
           </div>
           <div className="bio-panel">
             {[{ t: "facial", icon: "👤", title: "Biometria Facial", desc: "Captura 128 pontos de referência do rosto" }, { t: "digital", icon: "👆", title: "Impressão Digital", desc: "Leitura via sensor biométrico (ZFM-20 / Suprema)" }].map(o => (
-              <div key={o.t} className={`bio-option${type === o.t ? " active" : ""}`} onClick={() => setType(o.t)}>
+              <div key={o.t} className={`bio-option${type === o.t ? " active" : ""}`} onClick={() => { setType(o.t); setLgpdConsent(false); }}>
                 <div className="bio-option-icon">{o.icon}</div>
                 <div><div className="bio-option-title">{o.title}</div><div className="bio-option-desc">{o.desc}</div></div>
                 <div style={{ marginLeft: "auto" }}>{type === o.t ? <span style={{ color: "var(--orange)", fontSize: 20 }}>●</span> : <span style={{ color: "var(--border2)", fontSize: 20 }}>○</span>}</div>
               </div>
             ))}
           </div>
-          {type === "facial" && !cameraActive && (
+          {type === "facial" && !lgpdConsent && (
+            <div style={{ marginTop: 16, background: "rgba(255,171,0,0.07)", border: "1px solid rgba(255,171,0,0.3)", borderRadius: 10, padding: "16px 18px" }}>
+              <div style={{ fontFamily: "Barlow Condensed", fontWeight: 700, fontSize: 15, color: "var(--orange)", marginBottom: 8, letterSpacing: 0.5 }}>LGPD — Consentimento para Dados Biométricos</div>
+              <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.6, marginBottom: 12 }}>
+                Em conformidade com a Lei Geral de Proteção de Dados (Lei 13.709/2018), informamos que:
+                <ul style={{ margin: "8px 0 0 16px", padding: 0 }}>
+                  <li>A imagem facial e o descritor biométrico serão armazenados localmente para fins de verificação de identidade na entrega de EPIs.</li>
+                  <li>Os dados não serão compartilhados com terceiros.</li>
+                  <li>O titular pode solicitar a exclusão dos dados a qualquer momento na aba <strong>Gerenciar</strong>.</li>
+                  <li>A base legal é o legítimo interesse do empregador para controle de segurança (Art. 11, II, "a" da LGPD).</li>
+                </ul>
+              </div>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", fontSize: 13, color: "var(--text1)" }}>
+                <input type="checkbox" style={{ marginTop: 2, flexShrink: 0 }} checked={lgpdConsent} onChange={e => setLgpdConsent(e.target.checked)} />
+                <span>O funcionário <strong>{func?.nome}</strong> foi informado e consente com o tratamento dos dados biométricos faciais conforme descrito acima.</span>
+              </label>
+            </div>
+          )}
+          {type === "facial" && lgpdConsent && !cameraActive && (
             <div className="face-capture" style={{ height: 200, marginTop: 16, borderRadius: 10 }}>
               <div className="face-guide" />
               {scanning && <div className="scan-line" />}
@@ -974,7 +1008,7 @@ function BiometriaPage({ funcionarios, setFuncionarios, toast }) {
               <div className="confidence-bar"><div className="confidence-fill" style={{ width: progress + "%", background: "var(--orange)" }} /></div>
             </div>
           )}
-          <button className="btn btn-primary" style={{ marginTop: 16 }} disabled={!type || scanning || cameraActive} onClick={handleIniciarCaptura}>
+          <button className="btn btn-primary" style={{ marginTop: 16 }} disabled={!type || scanning || cameraActive || (type === "facial" && !lgpdConsent)} onClick={handleIniciarCaptura}>
             {scanning ? "⏳ Processando..." : "Iniciar Captura"}
           </button>
         </div>
@@ -1255,8 +1289,11 @@ function CancelarEntregaPage({ entregas, setEntregas, toast }) {
   );
 }
 
+// ─── FACE COMPARISON (SSIM via canvas, no external deps) ─────────────────────
+// Comparação real via face-api.js — veja src/faceApi.ts
+
 // ─── NOVA ENTREGA ─────────────────────────────────────────────────────────────
-function NovaEntregaPage({ epis, setEpis, funcionarios, entregas, setEntregas, toast, onNav }) {
+function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entregas, setEntregas, toast, onNav }) {
   const [step, setStep] = useState(0);
   const [func, setFunc] = useState(null);
   const [selected, setSelected] = useState([]);
@@ -1270,12 +1307,89 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, entregas, setEntregas, t
   const drawing = useRef(false);
   const [hasSig, setHasSig] = useState(false);
 
+  // ── facial verification states ──
+  const [faceStage, setFaceStage] = useState<"idle"|"capture"|"verifying"|"result">("idle");
+  const [facePhoto, setFacePhoto] = useState<string|null>(null);
+  const [faceScore, setFaceScore] = useState<number|null>(null);
+  const [faceOverride, setFaceOverride] = useState(false);
+
   useEffect(() => {
     if (func) {
       const updated = funcionarios.find(f => f.id === func.id);
       if (updated) setFunc(updated);
     }
   }, [funcionarios]);
+
+  const selectSigType = (t: string) => {
+    setSigType(t);
+    setFaceStage("idle");
+    setFacePhoto(null);
+    setFaceScore(null);
+    setFaceOverride(false);
+  };
+
+  const handleFaceCapture = async (base64: string) => {
+    setFacePhoto(base64);
+    setFaceStage("verifying");
+
+    const funcAtual: any = funcionarios.find((f: any) => f.id === func?.id) ?? func;
+    const bio: any = funcAtual?.biometrias?.find((b: any) => b.tipo === "facial");
+
+    // -1 = nenhum rosto detectado na captura
+    // -2 = sem referência cadastrada (recadastrar)
+    // >= 0 = score real de comparação
+
+    try {
+      const capturedDesc = await extractDescriptor(base64);
+      if (!capturedDesc) {
+        setFaceScore(-1);
+        setFaceStage("result");
+        return;
+      }
+
+      let score: number;
+      if (bio?.descriptor_json && isCurrentModelDescriptor(bio.descriptor_json)) {
+        // descriptor salvo com o modelo atual — usa direto (rápido)
+        score = compareDescriptors(jsonToDescriptor(bio.descriptor_json), capturedDesc);
+      } else if (bio?.imagem_base64) {
+        // descriptor ausente ou de modelo antigo — re-extrai da foto de cadastro
+        const refDesc = await extractDescriptor(bio.imagem_base64);
+        if (refDesc) {
+          score = compareDescriptors(refDesc, capturedDesc);
+          // salva novo descriptor para as próximas verificações
+          if (bio.id) {
+            const newDescJson = descriptorToJson(refDesc);
+            fetch(`/api/biometrias/${bio.id}/descriptor`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ descriptor_json: newDescJson }),
+            }).catch(() => {});
+            setFuncionarios((prev: any[]) => prev.map(f =>
+              f.id === funcAtual.id
+                ? { ...f, biometrias: f.biometrias.map((b: any) => b.id === bio.id ? { ...b, descriptor_json: newDescJson } : b) }
+                : f
+            ));
+          }
+        } else {
+          setFaceScore(-2);
+          setFaceStage("result");
+          return;
+        }
+      } else {
+        // nenhuma referência disponível
+        setFaceScore(-2);
+        setFaceStage("result");
+        return;
+      }
+
+      setFaceScore(score);
+    } catch (e) {
+      console.error("Erro na verificação facial:", e);
+      setFaceScore(-2);
+    }
+
+    setFaceStage("result");
+  };
 
   const steps = ["Funcionário","Itens","Confirmar","Assinar","Recibo"];
 
@@ -1285,6 +1399,7 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, entregas, setEntregas, t
   };
 
   const startSign = () => {
+    if (sigType === "facial" && faceStage !== "result") return;
     if (!sigType || (sigType === "manual" && !hasSig)) return;
     setSigning(true); setSigProgress(0);
     let p = 0;
@@ -1293,7 +1408,7 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, entregas, setEntregas, t
       if (p >= 100) {
         clearInterval(iv); setSigProgress(100);
         setTimeout(() => {
-          const confianca = sigType === "facial" ? +(88 + Math.random() * 10).toFixed(1) : sigType === "digital" ? +(92 + Math.random() * 7).toFixed(1) : null;
+          const confianca = sigType === "facial" ? faceScore : sigType === "digital" ? +(92 + Math.random() * 7).toFixed(1) : null;
           const itens = epis.filter(e => selected.includes(e.id)).map(e => ({ epi_id: e.id, nome: e.nome, img: e.img, qtd: qtds[e.id] || 1 }));
           setEntregas(prev => [{ id: newId, funcionario_id: func.id, funcionario: func.nome, data: new Date().toISOString().split("T")[0], itens, status: "assinado", tipo_assinatura: sigType, confianca }, ...prev]);
           setSigning(false); setDone(true); setStep(4);
@@ -1513,29 +1628,169 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, entregas, setEntregas, t
         </div>
       )}
 
-      {step === 3 && (
-        <div className="card">
-          <div className="card-header"><span className="card-title">Assinatura Biométrica</span></div>
-          <div className="card-body">
-            <div className="bio-panel">
-              {[{ t: "facial", icon: "👤", title: "Facial", desc: "Embedding 128D" }, { t: "digital", icon: "👆", title: "Digital", desc: "Template biométrico" }]
-                .filter(o => { const fu: any = funcionarios.find((f: any) => f.id === func?.id) ?? func; return fu?.biometrias?.some((b: any) => b.tipo === o.t); })
-                .map(o => (
-                <div key={o.t} className={`bio-option${sigType === o.t ? " active" : ""}`} onClick={() => setSigType(o.t)}>
-                  <div className="bio-option-icon">{o.icon}</div>
-                  <div><div className="bio-option-title">{o.title}</div><div className="bio-option-desc">{o.desc}</div></div>
+      {step === 3 && (() => {
+        const funcAtual: any = funcionarios.find((f: any) => f.id === func?.id) ?? func;
+        const bioFacial: any = funcAtual?.biometrias?.find((b: any) => b.tipo === "facial");
+        const getBio = (tipo: string) =>
+          funcAtual?.biometrias
+            ?.filter((b: any) => b.tipo === tipo)
+            .sort((a: any, b: any) => (b.data > a.data ? 1 : -1))[0] ?? null;
+
+        const bioOpts = [
+          { t: "facial",  icon: "👤", title: "Facial",  bio: getBio("facial")  },
+          { t: "digital", icon: "👆", title: "Digital", bio: getBio("digital") },
+          { t: "manual",  icon: "✍️", title: "Manual",  bio: null              },
+        ].filter(o => o.t === "manual" || o.bio !== null);
+
+        const facePassed = faceScore !== null && faceScore >= 60;
+        const faceDetected = faceScore !== null && faceScore >= 0;
+        const canSign = signing ? false
+          : sigType === "facial" ? (faceStage === "result" && faceDetected && (facePassed || faceOverride))
+          : sigType === "manual" ? hasSig
+          : !!sigType;
+
+        return (
+          <div className="card">
+            <div className="card-header"><span className="card-title">Assinatura</span></div>
+            <div className="card-body">
+
+              {/* método */}
+              <div className="bio-panel" style={{ marginBottom: 20 }}>
+                {bioOpts.map(o => (
+                  <div key={o.t} className={`bio-option${sigType === o.t ? " active" : ""}`} onClick={() => selectSigType(o.t)}
+                    style={{ alignItems: "flex-start", gap: 10 }}>
+                    {o.t === "facial" && (o.bio as any)?.imagem_base64
+                      ? <img src={(o.bio as any).imagem_base64} alt="bio" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border2)" }} />
+                      : <div className="bio-option-icon" style={{ flexShrink: 0 }}>{o.icon}</div>}
+                    <div style={{ minWidth: 0 }}>
+                      <div className="bio-option-title">{o.title}</div>
+                      {o.bio
+                        ? <div className="bio-option-desc">
+                          Cadastrada em {(o.bio as any).data}
+                          {(o.bio as any).qualidade ? ` · ${(o.bio as any).qualidade}% qualidade` : ""}
+                        </div>
+                        : <div className="bio-option-desc" style={{ color: "var(--text3)" }}>Assinatura manuscrita</div>}
+                      </div>
+                    </div>
+                ))}
+              </div>
+
+              {/* FACIAL */}
+              {sigType === "facial" && faceStage === "idle" && (
+                <div style={{ textAlign: "center", padding: "24px 0" }}>
+                  <div style={{ fontSize: 52, marginBottom: 12 }}>📷</div>
+                  <div style={{ color: "var(--text2)", marginBottom: 6 }}>Posicione o rosto do funcionário na câmera</div>
+                  <div style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginBottom: 20 }}>
+                    {bioFacial?.imagem_base64 ? "Foto de referência disponível — comparação real será realizada" : "Sem foto de referência — comparação simulada"}
+                  </div>
+                  <button className="btn btn-primary" onClick={() => setFaceStage("capture")}>Iniciar Câmera</button>
                 </div>
-              ))}
+              )}
+
+              {sigType === "facial" && faceStage === "capture" && (
+                <CameraCapture onCapture={handleFaceCapture} onCancel={() => setFaceStage("idle")} />
+              )}
+
+              {sigType === "facial" && faceStage === "verifying" && (
+                <div style={{ textAlign: "center", padding: "16px 0" }}>
+                  {facePhoto && <img src={facePhoto} alt="captura" style={{ width: 110, height: 110, borderRadius: 10, objectFit: "cover", border: "2px solid var(--border2)", marginBottom: 16 }} />}
+                  <div style={{ color: "var(--orange)", fontFamily: "IBM Plex Mono", fontSize: 13, marginBottom: 12 }}>Analisando identidade...</div>
+                  <div className="confidence-meter">
+                    <div className="confidence-label"><span>Processando</span><span style={{ fontFamily: "IBM Plex Mono" }}>⏳</span></div>
+                    <div className="confidence-bar" style={{ overflow: "hidden" }}><div className="confidence-fill bar-indeterminate" style={{ background: "var(--orange)" }} /></div>
+                  </div>
+                </div>
+              )}
+
+              {sigType === "facial" && faceStage === "result" && faceScore === -1 && (
+                <div style={{ textAlign: "center", padding: "24px 0" }}>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>😶</div>
+                  <div style={{ fontWeight: 600, color: "var(--red)", marginBottom: 8 }}>Nenhum rosto detectado na captura</div>
+                  <div style={{ fontSize: 13, color: "var(--text3)", marginBottom: 16 }}>Centralize o rosto do funcionário e garanta boa iluminação.</div>
+                  <button className="btn btn-primary" onClick={() => { setFaceStage("idle"); setFacePhoto(null); setFaceScore(null); }}>Tentar novamente</button>
+                </div>
+              )}
+
+              {sigType === "facial" && faceStage === "result" && faceScore === -2 && (
+                <div style={{ textAlign: "center", padding: "24px 0" }}>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
+                  <div style={{ fontWeight: 600, color: "var(--orange)", marginBottom: 8 }}>Sem biometria de referência</div>
+                  <div style={{ fontSize: 13, color: "var(--text3)", marginBottom: 16 }}>
+                    A biometria cadastrada não possui um descriptor facial válido.<br/>
+                    Recadastre a biometria deste funcionário na tela de Biometria para ativar a verificação real.
+                  </div>
+                  <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                    <button className="btn btn-ghost" onClick={() => { setFaceStage("idle"); setFacePhoto(null); setFaceScore(null); }}>Tentar novamente</button>
+                    <button className="btn btn-ghost" onClick={() => selectSigType("manual")}>Usar assinatura manual</button>
+                  </div>
+                </div>
+              )}
+
+              {sigType === "facial" && faceStage === "result" && faceScore !== null && faceScore >= 0 && (
+                <div>
+                  <div style={{ display: "flex", gap: 20, justifyContent: "center", alignItems: "center", marginBottom: 16 }}>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 10, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginBottom: 6, letterSpacing: 1 }}>CADASTRO</div>
+                      {bioFacial?.imagem_base64
+                        ? <img src={bioFacial.imagem_base64} alt="ref" style={{ width: 96, height: 96, borderRadius: 10, objectFit: "cover", border: "2px solid var(--border2)" }} />
+                        : <div style={{ width: 96, height: 96, borderRadius: 10, background: "var(--surface2)", border: "2px dashed var(--border2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>👤</div>}
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 28, marginBottom: 4 }}>{facePassed ? "✅" : "⚠️"}</div>
+                      <div style={{ fontFamily: "IBM Plex Mono", fontWeight: 700, fontSize: 22, color: facePassed ? "var(--green)" : "var(--red)" }}>{faceScore}%</div>
+                      <div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>confiança</div>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 10, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginBottom: 6, letterSpacing: 1 }}>CAPTURA</div>
+                      {facePhoto && <img src={facePhoto} alt="cap" style={{ width: 96, height: 96, borderRadius: 10, objectFit: "cover", border: `2px solid ${facePassed ? "var(--green)" : "var(--red)"}` }} />}
+                    </div>
+                  </div>
+                  {!facePassed && (
+                    <div style={{ background: "rgba(255,71,87,0.08)", border: "1px solid rgba(255,71,87,0.25)", borderRadius: 8, padding: "12px 16px", marginBottom: 12 }}>
+                      <div style={{ fontWeight: 600, color: "var(--red)", marginBottom: 4 }}>Confiança abaixo do limite (60%)</div>
+                      <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 10 }}>Verifique visualmente as fotos acima antes de prosseguir.</div>
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
+                        <input type="checkbox" checked={faceOverride} onChange={e => setFaceOverride(e.target.checked)} />
+                        Confirmo visualmente que é o mesmo funcionário (override supervisor)
+                      </label>
+                    </div>
+                  )}
+                  <button className="btn btn-ghost btn-sm" onClick={() => { setFaceStage("idle"); setFacePhoto(null); setFaceScore(null); setFaceOverride(false); }}>🔄 Tentar novamente</button>
+                </div>
+              )}
+
+              {/* DIGITAL */}
+              {sigType === "digital" && (
+                <div style={{ textAlign: "center", padding: "24px 0" }}>
+                  <div style={{ fontSize: 52, marginBottom: 8 }}>👆</div>
+                  <div style={{ color: "var(--text2)", fontFamily: "IBM Plex Mono", fontSize: 13 }}>Posicione o dedo no leitor biométrico</div>
+                </div>
+              )}
+
+              {/* MANUAL */}
+              {sigType === "manual" && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 8 }}>Assine no campo abaixo:</div>
+                  <canvas ref={canvasRef} width={460} height={120} style={{ background: "#fff", border: "1px solid var(--border2)", borderRadius: 8, cursor: "crosshair", display: "block", width: "100%" }}
+                    onMouseDown={startDraw} onMouseMove={draw} onMouseUp={() => { drawing.current = false; }} onMouseLeave={() => { drawing.current = false; }} />
+                  <button className="btn btn-ghost btn-xs" style={{ marginTop: 6 }} onClick={clearSig}>Limpar</button>
+                </div>
+              )}
+
+              {signing && (
+                <div className="confidence-meter" style={{ marginTop: 16 }}>
+                  <div className="confidence-label"><span>Registrando assinatura...</span><span>{sigProgress.toFixed(0)}%</span></div>
+                  <div className="confidence-bar"><div className="confidence-fill" style={{ width: sigProgress + "%", background: "var(--orange)" }} /></div>
+                </div>
+              )}
             </div>
-            {sigType === "facial" && (<div className="face-capture" style={{ height: 160, marginTop: 16, borderRadius: 10 }}><div className="face-guide" />{signing && <div className="scan-line" />}{!signing && <div style={{ textAlign: "center", zIndex: 2 }}><div style={{ fontSize: 28 }}>📷</div></div>}</div>)}
-            {signing && (<div className="confidence-meter" style={{ marginTop: 14 }}><div className="confidence-label"><span>Verificando...</span><span>{sigProgress.toFixed(0)}%</span></div><div className="confidence-bar"><div className="confidence-fill" style={{ width: sigProgress + "%", background: "var(--orange)" }} /></div></div>)}
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setStep(2)}>← Voltar</button>
+              <button className="btn btn-primary" disabled={!canSign} onClick={startSign}>{signing ? "⏳ Registrando..." : "✅ Assinar"}</button>
+            </div>
           </div>
-          <div className="modal-footer">
-            <button className="btn btn-ghost" onClick={() => setStep(2)}>← Voltar</button>
-            <button className="btn btn-primary" disabled={!sigType || signing} onClick={startSign}>{signing ? "⏳ Verificando..." : "✅ Assinar"}</button>
-          </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
@@ -2172,7 +2427,7 @@ export default function App() {
           </div>
           <div className="content">
             {page === "dashboard" && <Dashboard epis={epis} funcionarios={funcionarios} entregas={entregas} onNav={setPage} />}
-            {page === "nova-entrega" && <NovaEntregaPage epis={epis} setEpis={handleSetEpis} funcionarios={funcionarios} entregas={entregas} setEntregas={handleSetEntregas} toast={toast} onNav={setPage} />}
+            {page === "nova-entrega" && <NovaEntregaPage epis={epis} setEpis={handleSetEpis} funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} entregas={entregas} setEntregas={handleSetEntregas} toast={toast} onNav={setPage} />}
             {page === "cancelar-entrega" && <CancelarEntregaPage entregas={entregas} setEntregas={handleSetEntregas} toast={toast} />}
             {page === "entregas" && <EntregasPage entregas={entregas} setEntregas={handleSetEntregas} toast={toast} />}
             {page === "funcionarios" && <FuncionariosPage funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} cargos={cargos} toast={toast} />}

@@ -107,7 +107,15 @@ export function inicializarBancoDeDados() {
 
         db.run(INIT_BIOMETRIAS, (err) => {
             if (err) console.error('Erro ao criar tabela de biometrias:', err.message);
-            else console.log('Tabela "biometrias" verificada/criada com sucesso.');
+            else {
+                console.log('Tabela "biometrias" verificada/criada com sucesso.');
+                // migração: adiciona descriptor_json se ainda não existir
+                db.all(`PRAGMA table_info(biometrias)`, [], (_e, cols: any[]) => {
+                    if (!cols.some(c => c.name === 'descriptor_json')) {
+                        db.run(`ALTER TABLE biometrias ADD COLUMN descriptor_json TEXT`);
+                    }
+                });
+            }
         });
 
         // Cria a tabela de entregas

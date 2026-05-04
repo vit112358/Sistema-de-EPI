@@ -282,6 +282,7 @@ export interface Biometria {
     data: string;
     qualidade: number;
     imagem_base64?: string | null;
+    descriptor_json?: string | null;
 }
 
 // ── CARGOS ──────────────────────────────────────────────────────────────────
@@ -321,10 +322,19 @@ export function deletarCargo(id: number): Promise<void> {
 // CREATE Biometria
 export function salvarBiometria(b: Biometria): Promise<number> {
     return new Promise((resolve, reject) => {
-        const sql = `INSERT INTO biometrias (funcionario_id, tipo, data, qualidade, imagem_base64) VALUES (?, ?, ?, ?, ?)`;
-        db.run(sql, [b.funcionario_id, b.tipo, b.data, b.qualidade, b.imagem_base64 ?? null], function (err) {
+        const sql = `INSERT INTO biometrias (funcionario_id, tipo, data, qualidade, imagem_base64, descriptor_json) VALUES (?, ?, ?, ?, ?, ?)`;
+        db.run(sql, [b.funcionario_id, b.tipo, b.data, b.qualidade, b.imagem_base64 ?? null, b.descriptor_json ?? null], function (err) {
             if (err) return reject(err);
             resolve(this.lastID);
+        });
+    });
+}
+
+// UPDATE descriptor_json de uma biometria (migração de modelo)
+export function atualizarDescriptorBiometria(id: number, descriptor_json: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        db.run(`UPDATE biometrias SET descriptor_json = ? WHERE id = ?`, [descriptor_json, id], function (err) {
+            if (err) reject(err); else resolve();
         });
     });
 }

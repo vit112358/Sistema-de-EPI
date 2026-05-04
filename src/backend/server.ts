@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo} from './crud.ts';
+import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo} from './crud.ts';
 
 const app = express();
 const PORT = 3000;
@@ -161,6 +161,17 @@ app.post('/api/biometrias', async (req, res) => {
     } catch (error) {
         console.error('Erro ao salvar biometria:', error);
         res.status(500).json({ error: 'Erro ao salvar biometria' });
+    }
+});
+
+app.patch('/api/biometrias/:id/descriptor', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        await atualizarDescriptorBiometria(id, req.body.descriptor_json);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Erro ao atualizar descriptor:', error);
+        res.status(500).json({ error: 'Erro ao atualizar descriptor' });
     }
 });
 
