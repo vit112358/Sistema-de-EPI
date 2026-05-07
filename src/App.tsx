@@ -1,7 +1,15 @@
-import { useState, useEffect, useRef } from "react";
+import {useEffect, useRef, useState} from "react";
 import Landing from "./Landing";
-import { jsPDF } from "jspdf";
-import { loadFaceModels, extractDescriptor, compareDescriptors, descriptorToJson, jsonToDescriptor, isCurrentModelDescriptor, MODEL_VERSION, detectLandmarks, computeEAR } from "./faceApi";
+import {jsPDF} from "jspdf";
+import {
+  compareDescriptors,
+  computeEAR,
+  descriptorToJson,
+  detectLandmarks,
+  extractDescriptor,
+  isCurrentModelDescriptor,
+  jsonToDescriptor
+} from "./faceApi";
 
 // ─── CONFIGURAÇÕES DA EMPRESA ─────────────────────────────────────────────────
 const COMPANY_CONFIG = {
