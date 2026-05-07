@@ -197,6 +197,47 @@ const css = `
   .tab { padding: 7px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text3); transition: all 0.15s; }
   .tab.active { background: var(--orange); color: #000; }
   .tab:hover:not(.active) { color: var(--text); background: var(--surface2); }
+  .menu-btn { display: none; background: none; border: none; color: var(--text); font-size: 22px; cursor: pointer; padding: 4px 8px; border-radius: 6px; line-height: 1; flex-shrink: 0; }
+  .menu-btn:hover { background: var(--surface2); }
+  .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 499; }
+  @media (max-width: 768px) {
+    .menu-btn { display: flex; align-items: center; justify-content: center; }
+    .sidebar { position: fixed; left: -240px; top: 0; height: 100vh; z-index: 500; transition: left 0.25s ease; box-shadow: none; }
+    .sidebar.open { left: 0; box-shadow: 4px 0 24px rgba(0,0,0,0.5); }
+    .sidebar-overlay.open { display: block; }
+    .main { width: 100%; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .two-col { grid-template-columns: 1fr; }
+    .epi-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .func-grid { grid-template-columns: 1fr; }
+    .input-row { grid-template-columns: 1fr; }
+    .topbar { padding: 0 14px; gap: 8px; height: 52px; }
+    .topbar-sub { display: none; }
+    .topbar-title { font-size: 17px; }
+    .content { padding: 14px; }
+    .modal-overlay { padding: 12px; }
+    .modal { max-width: 100%; }
+    .toast-container { bottom: 12px; right: 12px; left: 12px; }
+    .toast { min-width: unset; }
+    .tab-bar { width: 100%; }
+    .tab { flex: 1; text-align: center; padding: 7px 10px; font-size: 12px; }
+    .card-header { padding: 12px 16px; }
+    .card-body { padding: 14px; }
+    th { padding: 8px 12px; }
+    td { padding: 10px 12px; }
+    .action-btns { flex-direction: column; gap: 4px; }
+    .stat-value { font-size: 28px; }
+    .confirm-box { margin: 12px; }
+  }
+  @media (max-width: 480px) {
+    .epi-grid { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .content { padding: 10px; }
+    .topbar { padding: 0 10px; }
+    .login-card { padding: 28px 20px; }
+    .steps { gap: 0; }
+    .step-label { font-size: 9px; }
+  }
 `;
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -393,14 +434,20 @@ function EpiModal({ epi, onClose, onSave, onDelete }) {
           <div className="input-group">
             <label className="input-label">Números CA — máx. 5 <span style={{ fontWeight: 400, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>({cas.length}/5)</span></label>
             {cas.map((ca, i) => (
-              <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-                <input className="input" placeholder="Número CA" value={ca.numero} style={{ flex: 1 }}
-                  onChange={ev => setCas(p => p.map((c, j) => j === i ? { ...c, numero: ev.target.value } : c))} />
-                <input className="input" type="date" value={ca.validade} style={{ width: 160 }}
-                  onChange={ev => setCas(p => p.map((c, j) => j === i ? { ...c, validade: ev.target.value } : c))} />
+              <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "flex-end" }}>
+                <div style={{ flex: 1 }}>
+                  {i === 0 && <label className="input-label" style={{ marginBottom: 4 }}>Número CA</label>}
+                  <input className="input" placeholder="Número CA" value={ca.numero}
+                    onChange={ev => setCas(p => p.map((c, j) => j === i ? { ...c, numero: ev.target.value } : c))} />
+                </div>
+                <div style={{ width: 160 }}>
+                  {i === 0 && <label className="input-label" style={{ marginBottom: 4 }}>Vencimento do CA</label>}
+                  <input className="input" type="date" value={ca.validade}
+                    onChange={ev => setCas(p => p.map((c, j) => j === i ? { ...c, validade: ev.target.value } : c))} />
+                </div>
                 {cas.length > 1 && (
                   <button onClick={() => setCas(p => p.filter((_, j) => j !== i))}
-                    style={{ background: "transparent", border: "1px solid var(--border2)", borderRadius: 6, color: "var(--red)", cursor: "pointer", padding: "4px 10px", fontSize: 16 }}>×</button>
+                    style={{ background: "transparent", border: "1px solid var(--border2)", borderRadius: 6, color: "var(--red)", cursor: "pointer", padding: "4px 10px", fontSize: 16, marginBottom: 1 }}>×</button>
                 )}
               </div>
             ))}
@@ -616,21 +663,25 @@ function CargosPage({ cargos, setCargos, toast }) {
   );
 }
 
-function FuncionariosPage({ funcionarios, setFuncionarios, cargos, toast }) {
+function FuncionariosPage({ funcionarios, setFuncionarios, onAddFuncionario, cargos, toast }) {
   const [addModal, setAddModal] = useState(false);
   const [editFunc, setEditFunc] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
 
-  const saveFunc = (f) => {
+  const saveFunc = async (f) => {
     if (f.id) {
       setFuncionarios(prev => prev.map(x => x.id === f.id ? { ...x, ...f } : x));
       toast("Dados atualizados!", "success");
+      setEditFunc(null); setAddModal(false);
     } else {
-      const novoFunc = { ...f, id: Date.now(), biometrias: [] };
-      setFuncionarios(prev => [...prev, novoFunc]);
-      toast("Funcionário cadastrado!", "success");
+      const result = await onAddFuncionario(f);
+      if (result.ok) {
+        toast("Funcionário cadastrado!", "success");
+        setEditFunc(null); setAddModal(false);
+      } else {
+        toast(result.error || "Erro ao criar funcionário", "error");
+      }
     }
-    setEditFunc(null); setAddModal(false);
   };
 
   const deleteFunc = (f) => {
@@ -794,10 +845,10 @@ function CameraCapture({ onCapture, onCancel }: { onCapture: (base64: string) =>
 }
 
 // ─── LIVENESS CAPTURE ─────────────────────────────────────────────────────────
-const LIVENESS_TIMEOUT = 12;
-const PEAK_WINDOW      = 20;   // frames (~2s) para rastrear pico de EAR (olhos bem abertos)
-const CLOSED_RATIO     = 0.75; // fechado = EAR cai para 75% do pico
-const OPEN_RATIO       = 0.88; // aberto  = EAR volta a 88% do pico → piscar confirmado
+const LIVENESS_TIMEOUT = 15;
+const PEAK_WINDOW      = 15;   // frames para rastrear pico de EAR (olhos bem abertos)
+const CLOSED_RATIO     = 0.82; // fechado = EAR cai para 82% do pico (basta fechar levemente)
+const OPEN_RATIO       = 0.84; // aberto  = EAR volta a 84% do pico → piscar confirmado
 
 function LivenessCapture({ onCapture, onCancel }: { onCapture: (b: string) => void; onCancel: () => void }) {
   const videoRef    = useRef<HTMLVideoElement>(null);
@@ -859,8 +910,8 @@ function LivenessCapture({ onCapture, onCancel }: { onCapture: (b: string) => vo
         earHistory.current.push(ear);
         if (earHistory.current.length > PEAK_WINDOW) earHistory.current.shift();
 
-        // precisa de pelo menos 4 frames para ter um pico confiável
-        if (earHistory.current.length < 4) return;
+        // precisa de pelo menos 3 frames para ter um pico confiável
+        if (earHistory.current.length < 3) return;
 
         // pico = máximo dos frames recentes (representa olhos bem abertos)
         const peak = Math.max(...earHistory.current);
@@ -879,7 +930,7 @@ function LivenessCapture({ onCapture, onCancel }: { onCapture: (b: string) => vo
           setStage("challenge");
         }
       } catch { /* frame descartado */ }
-    }, 100);
+    }, 80);
   };
 
   const startCamera = () => {
@@ -931,7 +982,7 @@ function LivenessCapture({ onCapture, onCancel }: { onCapture: (b: string) => vo
             fechamento dos olhos {dropPct > 0 ? `−${dropPct}%` : ""}
           </div>
           <div style={{ height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 2, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${Math.min(100, dropPct * 5)}%`, background: stage === "blink" ? "var(--orange)" : "var(--green)", transition: "width 0.08s" }} />
+            <div style={{ height: "100%", width: `${Math.min(100, dropPct * 6)}%`, background: stage === "blink" ? "var(--orange)" : "var(--green)", transition: "width 0.08s" }} />
           </div>
         </div>
       )}
@@ -1255,12 +1306,120 @@ function SignModal({ entrega, onClose, onSign }) {
   );
 }
 
-function EntregasPage({ entregas, setEntregas, toast }) {
+function EntregasPage({ entregas, setEntregas, epis, toast }) {
   const [filter, setFilter] = useState("todos");
   const [busca, setBusca] = useState("");
   const [ordemNome, setOrdemNome] = useState<"asc" | "desc" | null>(null);
   const [signModal, setSignModal] = useState(null);
   const [cancelConfirm, setCancelConfirm] = useState(null);
+
+  const gerarFicha = (entrega: any) => {
+    const fmtDataStr = (s: string) => { const [yr, mo, dy] = s.split("-"); return `${dy}/${mo}/${yr}`; };
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const pageW = 210;
+    const margin = 20;
+    const contentW = pageW - margin * 2;
+    let y = 20;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("FICHA DE ENTREGA DE EPI", pageW / 2, y, { align: "center" });
+    y += 7;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(120, 120, 120);
+    doc.text(`#${String(entrega.id).padStart(4,"0")} · ${fmtDataStr(entrega.data)}`, pageW / 2, y, { align: "center" });
+    doc.setTextColor(0, 0, 0);
+    y += 10;
+
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, y, pageW - margin, y);
+    y += 8;
+
+    const nomeFuncionario = entrega.funcionario ?? "";
+    const declaracao =
+      `Eu, ${nomeFuncionario}, declaro para todos os efeitos previstos na legislação, haver recebido gratuitamente, conforme descrito na C.L.T. nos artigos 166, 167 e demais artigos adstritos à matéria, na NR - 6 e nos itens 1.4.2 e 1.5.5.1.2 da NR - 1 DISPOSIÇÕES GERAIS e GERENCIAMENTO DE RISCOS OCUPACIONAIS, após treinamento e orientação do uso adequado, aplicação, guarda, conservação, substituição e requisitos de higiene, em palestra realizada pelo Serviço Especializado em Segurança e Medicina do Trabalho da empresa, ${COMPANY_CONFIG.nome}, situada ${COMPANY_CONFIG.endereco}, o(s) equipamento(s) de proteção individual abaixo descrito(s) e designado(s) como EPIs, os quais obrigo-me a usá-lo(s) sistematicamente em meu trabalho, mediante ainda, os termos seguintes:\n\n` +
+      `a) O EPI será usado unicamente para finalidade a que se destina e qualquer alteração que o torne parcial ou totalmente danificado será por mim comunicado à empresa;\n\n` +
+      `b) Declaro que me responsabilizo pela guarda e conservação dos EPI's que me foram confiados e que, na impossibilidade de seu uso, deverei comunicar a chefia imediatamente, para as providências que se fizerem necessárias, e os devolverei após o vencimento de duração estipulada;\n\n` +
+      `c) Estou ciente e de pleno acordo que a falta de uso por mim, dos EPI's fornecidos pela Empresa, constitui Ato Faltoso, sujeito às sanções disciplinares previstas na legislação pertinente aos assuntos, Regulamento Interno e Normas de Segurança da Empresa;\n\n` +
+      `d) Reconhecendo expressamente que a sua não utilização configura em falta grave capitulada na letra "h", do Artigo 482 da C.L.T., como ato de indisciplina ou de insubordinação, ensejadora da rescisão do meu contrato de trabalho por justa causa;\n\n` +
+      `e) Autorizo expressamente a Empresa a proceder descontos nos meus salários, vencimentos, gratificações, indenizações, os valores dos EPI's que por ventura por mim forem:\n` +
+      `   - Danificados propositadamente;\n` +
+      `   - Extraviados;\n` +
+      `   - Não devolvidos à empresa para substituição;\n\n` +
+      `f) Tomei ciência e estou de acordo com os termos da declaração acima, assinando-a de livre e espontânea vontade, após sua leitura nessa data`;
+
+    doc.setFontSize(9);
+    const linhas = doc.splitTextToSize(declaracao, contentW);
+    doc.text(linhas, margin, y);
+    y += linhas.length * 4.5 + 10;
+
+    doc.setFontSize(9);
+    doc.text(`Data: ${fmtDataStr(entrega.data)}`, margin, y);
+    y += 16;
+
+    const sigLineW = 80;
+    const sigLineX = (pageW - sigLineW) / 2;
+    doc.setDrawColor(0, 0, 0);
+    doc.line(sigLineX, y, sigLineX + sigLineW, y);
+    y += 5;
+    doc.setFontSize(9);
+    doc.text(nomeFuncionario, pageW / 2, y, { align: "center" });
+    y += 4;
+    doc.setTextColor(100, 100, 100);
+    const sigLabel = entrega.tipo_assinatura === "facial" ? "Assinado biometricamente (Facial)"
+      : entrega.tipo_assinatura === "digital" ? "Assinado biometricamente (Digital)"
+      : "Assinatura do Funcionário";
+    doc.text(sigLabel, pageW / 2, y, { align: "center" });
+    doc.setTextColor(0, 0, 0);
+    y += 14;
+
+    const pageH = 297;
+    const colW = [contentW * 0.42, contentW * 0.22, contentW * 0.14, contentW * 0.22];
+    const headers = ["EPI / Descrição", "CA", "Quantidade", "Próxima Troca"];
+
+    const drawTableHeader = (yPos: number) => {
+      doc.setDrawColor(200, 200, 200);
+      doc.line(margin, yPos, pageW - margin, yPos);
+      yPos += 6;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text("EPIs ENTREGUES", margin, yPos);
+      yPos += 6;
+      doc.setFillColor(240, 240, 240);
+      doc.rect(margin, yPos - 4, contentW, 7, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      let hx = margin;
+      headers.forEach((h, i) => { doc.text(h, hx + 2, yPos); hx += colW[i]; });
+      yPos += 5;
+      doc.setFont("helvetica", "normal");
+      return yPos;
+    };
+
+    if (y > pageH - 60) { doc.addPage(); y = 20; }
+    y = drawTableHeader(y);
+
+    (entrega.itens ?? []).forEach((item: any) => {
+      if (y > pageH - 20) { doc.addPage(); y = 20; y = drawTableHeader(y); }
+      const epiData = epis?.find((e: any) => e.id === item.epi_id);
+      const periodicidade = epiData?.periodicidade ?? null;
+      const proxTroca = periodicidade != null ? fmtDate(addDays(entrega.data, periodicidade)) : "—";
+      const row = [item.nome, item.ca ?? "", `${item.qtd || 1} un`, proxTroca];
+      doc.setDrawColor(220, 220, 220);
+      doc.line(margin, y + 3, pageW - margin, y + 3);
+      let colX = margin;
+      row.forEach((cell, i) => {
+        doc.setFontSize(8);
+        const wrapped = doc.splitTextToSize(String(cell), colW[i] - 4);
+        doc.text(wrapped, colX + 2, y);
+        colX += colW[i];
+      });
+      y += 7;
+    });
+
+    doc.save(`ficha_epi_${nomeFuncionario.replace(/\s+/g, "_")}_${entrega.data}.pdf`);
+  };
 
   const doSign = (id, tipo) => {
     const confianca = tipo === "facial" ? +(88 + Math.random() * 10).toFixed(1) : tipo === "digital" ? +(92 + Math.random() * 7).toFixed(1) : null;
@@ -1349,8 +1508,14 @@ function EntregasPage({ entregas, setEntregas, toast }) {
                           <button className="btn btn-danger btn-xs" onClick={() => setCancelConfirm(e)}>✕ Cancelar</button>
                         </>
                       )}
-                      {e.status === "assinado" && <span style={{ fontSize: 11, color: "var(--text3)" }}>—</span>}
-                      {e.status === "cancelado" && <span style={{ fontSize: 11, color: "var(--text3)" }}>—</span>}
+                      {e.status !== "pendente_assinatura" && (
+                        <button
+                          className="btn btn-ghost btn-xs"
+                          title="Baixar ficha PDF"
+                          onClick={() => gerarFicha(e)}
+                          style={{ fontSize: 15, padding: "2px 6px" }}
+                        >⬇️</button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -1456,10 +1621,14 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
   const [func, setFunc] = useState(null);
   const [selected, setSelected] = useState([]);
   const [qtds, setQtds] = useState({});
+  const [epiFilter, setEpiFilter] = useState("");
+  const [epiPage, setEpiPage] = useState(0);
+  const EPI_PAGE_SIZE = 9;
   const [sigType, setSigType] = useState(null);
   const [signing, setSigning] = useState(false);
   const [sigProgress, setSigProgress] = useState(0);
   const [done, setDone] = useState(false);
+  const [savedAsPending, setSavedAsPending] = useState(false);
   const [newId] = useState(Date.now());
   const canvasRef = useRef(null);
   const drawing = useRef(false);
@@ -1592,6 +1761,13 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
         }, 500);
       } else setSigProgress(p);
     }, 150);
+  };
+
+  const saveAsPending = () => {
+    const itens = selEpis.map(e => ({ epi_id: e.id, nome: e.nome, img: e.img, ca: e.ca, qtd: qtds[e.itemKey] || 1 }));
+    setEntregas(prev => [{ id: newId, funcionario_id: func.id, funcionario: func.nome, data: new Date().toISOString().split("T")[0], itens, status: "pendente_assinatura", tipo_assinatura: null, confianca: null }, ...prev]);
+    setSavedAsPending(true); setDone(true); setStep(4);
+    toast("Entrega salva como pendente de assinatura.", "info");
   };
 
   const getCanvasPos = (e, r, c) => {
@@ -1729,36 +1905,49 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
       y += 14;
     }
 
-    // Linha separadora antes da tabela
-    doc.setDrawColor(200, 200, 200);
-    doc.line(margin, y, pageW - margin, y);
-    y += 6;
-
-    // Título da tabela
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.text("EPIs ENTREGUES", margin, y);
-    y += 6;
-
-    // Cabeçalho da tabela
+    const pageH = 297;
     const colW = [contentW * 0.42, contentW * 0.22, contentW * 0.14, contentW * 0.22];
     const headers = ["EPI / Descrição", "CA", "Quantidade", "Próxima Troca"];
-    doc.setFillColor(240, 240, 240);
-    doc.rect(margin, y - 4, contentW, 7, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    let colX = margin;
-    headers.forEach((h, i) => { doc.text(h, colX + 2, y); colX += colW[i]; });
-    y += 5;
-    doc.setFont("helvetica", "normal");
+
+    const drawTableHeader = (yPos: number) => {
+      doc.setDrawColor(200, 200, 200);
+      doc.line(margin, yPos, pageW - margin, yPos);
+      yPos += 6;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text("EPIs ENTREGUES", margin, yPos);
+      yPos += 6;
+      doc.setFillColor(240, 240, 240);
+      doc.rect(margin, yPos - 4, contentW, 7, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      let hx = margin;
+      headers.forEach((h, i) => { doc.text(h, hx + 2, yPos); hx += colW[i]; });
+      yPos += 5;
+      doc.setFont("helvetica", "normal");
+      return yPos;
+    };
+
+    // Se não há espaço suficiente para a tabela, começa nova página
+    if (y > pageH - 60) {
+      doc.addPage();
+      y = 20;
+    }
+
+    y = drawTableHeader(y);
 
     // Linhas da tabela
     selEpis.forEach((epi) => {
+      if (y > pageH - 20) {
+        doc.addPage();
+        y = 20;
+        y = drawTableHeader(y);
+      }
       const proxTroca = fmtDate(addDays(new Date().toISOString().split("T")[0], epi.periodicidade));
       const row = [epi.nome, epi.ca, `${qtds[epi.itemKey] || 1} un`, proxTroca];
       doc.setDrawColor(220, 220, 220);
       doc.line(margin, y + 3, pageW - margin, y + 3);
-      colX = margin;
+      let colX = margin;
       row.forEach((cell, i) => {
         doc.setFontSize(8);
         const wrapped = doc.splitTextToSize(cell, colW[i] - 4);
@@ -1773,19 +1962,23 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
 
   if (done) return (
     <div>
-      <div className="alert alert-success" style={{ marginBottom: 20 }}>✅ Entrega registrada e assinada com sucesso!</div>
+      {savedAsPending
+        ? <div className="alert alert-warning" style={{ marginBottom: 20 }}>⏳ Entrega registrada — assinatura pendente. Acesse o histórico para assinar.</div>
+        : <div className="alert alert-success" style={{ marginBottom: 20 }}>✅ Entrega registrada e assinada com sucesso!</div>}
       <div className="card">
         <div className="card-header" style={{ background: "var(--surface2)" }}>
           <div><div style={{ fontFamily: "Barlow Condensed", fontSize: 20, fontWeight: 800 }}>FICHA DE ENTREGA DE EPI</div><div style={{ fontSize: 11, fontFamily: "IBM Plex Mono", color: "var(--text3)" }}>#{String(newId).slice(-6)} · {new Date().toLocaleDateString("pt-BR")}</div></div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button className="btn btn-ghost btn-sm" onClick={exportarFicha}>⬇️ Exportar Ficha</button>
-            <span className="badge badge-green" style={{ fontSize: 13 }}>✓ ASSINADO</span>
+            {!savedAsPending && <button className="btn btn-ghost btn-sm" onClick={exportarFicha}>⬇️ Exportar Ficha</button>}
+            {savedAsPending
+              ? <span className="badge badge-orange" style={{ fontSize: 13 }}>⏳ PENDENTE</span>
+              : <span className="badge badge-green" style={{ fontSize: 13 }}>✓ ASSINADO</span>}
           </div>
         </div>
         <div className="card-body">
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
             <div><div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginBottom: 4 }}>FUNCIONÁRIO</div><div style={{ fontWeight: 600 }}>{func?.nome}</div><div style={{ fontSize: 12, color: "var(--text3)" }}>{func?.matricula} · {func?.setor}</div></div>
-            <div><div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginBottom: 4 }}>ASSINATURA</div><div style={{ fontWeight: 600 }}>{sigType === "facial" ? "👤 Facial" : sigType === "digital" ? "👆 Digital" : "✍️ Manual"}</div></div>
+            <div><div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginBottom: 4 }}>ASSINATURA</div><div style={{ fontWeight: 600 }}>{savedAsPending ? "⏳ Pendente" : sigType === "facial" ? "👤 Facial" : sigType === "digital" ? "👆 Digital" : "✍️ Manual"}</div></div>
           </div>
           <table><thead><tr><th>EPI</th><th>CA</th><th>Qtd</th><th>Próxima Troca</th></tr></thead>
             <tbody>{selEpis.map(e => (<tr key={e.itemKey}><td><span style={{ marginRight: 6 }}>{e.img}</span>{e.nome}</td><td><span className="tag">{e.ca}</span></td><td>{qtds[e.itemKey] || 1} un</td><td style={{ fontFamily: "IBM Plex Mono", fontSize: 11, color: "var(--orange)" }}>{fmtDate(addDays(new Date().toISOString().split("T")[0], e.periodicidade))}</td></tr>))}</tbody>
@@ -1820,32 +2013,79 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
         </div>
       )}
 
-      {step === 1 && (
-        <div>
-          <div className="epi-grid">
-            {epiCaItems.map(item => {
-              const sel = selected.includes(item.itemKey);
-              return (
-                <div key={item.itemKey} className="epi-card" style={{ border: sel ? "1px solid var(--orange)" : undefined, background: sel ? "var(--orange-dim)" : undefined }} onClick={() => toggleEpi(item.itemKey)}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}><div className="epi-icon">{item.img}</div>{sel && <span className="badge badge-orange">✓</span>}</div>
-                  <div className="epi-name">{item.nome}</div>
-                  <div className="epi-ca">{item.ca}</div>
-                  <div style={{ fontSize: 11, color: "var(--orange)", marginTop: 4, fontFamily: "IBM Plex Mono" }}>🔄 Troca: {item.periodicidade}d</div>
-                  {sel && (<div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }} onClick={ev => ev.stopPropagation()}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setQtds(p => ({ ...p, [item.itemKey]: Math.max(1, (p[item.itemKey]||1)-1) }))}>−</button>
-                    <span style={{ fontFamily: "IBM Plex Mono", fontWeight: 700 }}>{qtds[item.itemKey]||1}</span>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setQtds(p => ({ ...p, [item.itemKey]: (p[item.itemKey]||1)+1 }))}>+</button>
-                  </div>)}
+      {step === 1 && (() => {
+        const filtered = epiCaItems.filter(item =>
+          !epiFilter || item.ca?.toLowerCase().includes(epiFilter.toLowerCase())
+        );
+        const totalPages = Math.max(1, Math.ceil(filtered.length / EPI_PAGE_SIZE));
+        const pageItems = filtered.slice(epiPage * EPI_PAGE_SIZE, (epiPage + 1) * EPI_PAGE_SIZE);
+        return (
+          <div>
+            <div style={{ marginBottom: 14 }}>
+              <input
+                className="input"
+                style={{ maxWidth: 260 }}
+                placeholder="Filtrar por CA..."
+                value={epiFilter}
+                onChange={e => { setEpiFilter(e.target.value); setEpiPage(0); }}
+              />
+            </div>
+            <div className="epi-grid">
+              {pageItems.map(item => {
+                const sel = selected.includes(item.itemKey);
+                const semEstoque = Number(item.estoque) <= 0;
+                return (
+                  <div key={item.itemKey} className="epi-card" style={{ border: sel ? "1px solid var(--orange)" : undefined, background: sel ? "var(--orange-dim)" : semEstoque ? "rgba(255,255,255,0.02)" : undefined, opacity: semEstoque ? 0.45 : 1, cursor: semEstoque ? "not-allowed" : "pointer", pointerEvents: semEstoque ? "none" : undefined }} onClick={() => !semEstoque && toggleEpi(item.itemKey)}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}><div className="epi-icon">{item.img}</div>{sel && <span className="badge badge-orange">✓</span>}</div>
+                    <div className="epi-name">{item.nome}</div>
+                    <div className="epi-ca">{item.ca}</div>
+                    <div style={{ fontSize: 11, color: "var(--orange)", marginTop: 4, fontFamily: "IBM Plex Mono" }}>🔄 Troca: {item.periodicidade}d</div>
+                    <div style={{ fontSize: 10, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginTop: 2 }}>📦 Estoque: {item.estoque ?? 0}</div>
+                    {sel && (() => {
+                      const estoque = Number(item.estoque) || 0;
+                      const qtd = qtds[item.itemKey] || 1;
+                      return (
+                        <div style={{ marginTop: 10 }} onClick={ev => ev.stopPropagation()}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setQtds(p => ({ ...p, [item.itemKey]: Math.max(1, qtd - 1) }))}>−</button>
+                            <span style={{ fontFamily: "IBM Plex Mono", fontWeight: 700 }}>{qtd}</span>
+                            <button className="btn btn-ghost btn-sm"
+                              disabled={qtd >= estoque}
+                              style={{ opacity: qtd >= estoque ? 0.4 : 1 }}
+                              onClick={() => { if (qtd < estoque) setQtds(p => ({ ...p, [item.itemKey]: qtd + 1 })); }}>+</button>
+                          </div>
+                          {qtd >= estoque && estoque > 0 && (
+                            <div style={{ fontSize: 10, color: "var(--orange)", fontFamily: "IBM Plex Mono", marginTop: 2 }}>máx. estoque ({estoque})</div>
+                          )}
+                          {estoque <= 0 && (
+                            <div style={{ fontSize: 10, color: "var(--red)", fontFamily: "IBM Plex Mono", marginTop: 2 }}>⚠ sem estoque</div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              })}
+              {pageItems.length === 0 && (
+                <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px 0", color: "var(--text3)", fontFamily: "IBM Plex Mono", fontSize: 13 }}>
+                  Nenhum EPI encontrado para CA "{epiFilter}"
                 </div>
-              );
-            })}
+              )}
+            </div>
+            {totalPages > 1 && (
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, marginTop: 14 }}>
+                <button className="btn btn-ghost btn-sm" disabled={epiPage === 0} onClick={() => setEpiPage(p => p - 1)}>← Anterior</button>
+                <span style={{ fontSize: 12, fontFamily: "IBM Plex Mono", color: "var(--text3)" }}>Página {epiPage + 1} de {totalPages}</span>
+                <button className="btn btn-ghost btn-sm" disabled={epiPage >= totalPages - 1} onClick={() => setEpiPage(p => p + 1)}>Próximo →</button>
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+              <button className="btn btn-ghost" onClick={() => setStep(0)}>← Voltar</button>
+              <button className="btn btn-primary" disabled={selected.length === 0} onClick={() => setStep(2)}>Próximo ({selected.length}) →</button>
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-            <button className="btn btn-ghost" onClick={() => setStep(0)}>← Voltar</button>
-            <button className="btn btn-primary" disabled={selected.length === 0} onClick={() => setStep(2)}>Próximo ({selected.length}) →</button>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {step === 2 && (
         <div className="card">
@@ -2020,6 +2260,7 @@ function NovaEntregaPage({ epis, setEpis, funcionarios, setFuncionarios, entrega
             </div>
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setStep(2)}>← Voltar</button>
+              <button className="btn btn-ghost" disabled={signing} onClick={saveAsPending} title="Salva a entrega sem assinatura para assinar depois">⏳ Salvar como Pendente</button>
               <button className="btn btn-primary" disabled={!canSign} onClick={startSign}>{signing ? "⏳ Registrando..." : "✅ Assinar"}</button>
             </div>
           </div>
@@ -2377,6 +2618,7 @@ export default function App() {
       .catch(() => {});
   }, []);
   const [page, setPage] = useState("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [cargos, setCargos] = useState([]);
   const [epis, setEpis] = useState([]);
   const [funcionarios, setFuncionarios] = useState([]);
@@ -2533,7 +2775,7 @@ export default function App() {
             })
           })
               .then(res => res.json())
-              .then(data => console.log("Funcionário salvo no banco com sucesso, BD_ID:", data.id))
+              .then(data => console.log("Funcionário salvo no banco, BD_ID:", data.id))
               .catch(err => console.error("Falha ao salvar funcionário no banco:", err));
         }
       }
@@ -2570,6 +2812,30 @@ export default function App() {
 
       return novosFuncionarios;
     });
+  };
+
+  const criarFuncionario = async (funcData: any): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const res = await fetch('/api/funcionarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome: funcData.nome,
+          matricula: funcData.matricula,
+          setor: funcData.setor,
+          cargo: funcData.cargo,
+          email: funcData.email,
+          telefone: funcData.telefone
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) return { ok: false, error: data.error || 'Erro ao criar funcionário' };
+      // Usa o setter raw do React (não handleSetFuncionarios) para não disparar outro POST
+      setFuncionarios((prev: any) => [...prev, { ...funcData, id: data.id, biometrias: [] }]);
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Erro de conexão com o servidor' };
+    }
   };
 
   const handleSetEpis = (acao: any) => {
@@ -2644,7 +2910,8 @@ export default function App() {
     <>
       <style>{css}</style>
       <div className="app">
-        <div className="sidebar">
+        <div className={`sidebar-overlay${sidebarOpen ? " open" : ""}`} onClick={() => setSidebarOpen(false)} />
+        <div className={`sidebar${sidebarOpen ? " open" : ""}`}>
           <div className="sidebar-logo">
             <div className="logo-icon" style={{background:'transparent',padding:0}}><img src="/favicon.svg" style={{width:'36px',height:'36px',objectFit:'contain'}} /></div>
             <div><div className="logo-text">SegurID</div><div className="logo-sub">Entrega de EPI por biometria</div></div>
@@ -2653,7 +2920,7 @@ export default function App() {
             {NAV.filter(item => !(item.id === "cadastro-usuarios" && currentUser.role !== "admin")).map(item => (
               <div key={item.id}>
                 {item.section && <div className="nav-section">{item.section}</div>}
-                <div className={`nav-item${page === item.id ? " active" : ""}`} onClick={() => setPage(item.id)}>
+                <div className={`nav-item${page === item.id ? " active" : ""}`} onClick={() => { setPage(item.id); setSidebarOpen(false); }}>
                   <span className="nav-icon">{item.icon}</span>
                   {item.label}
                   {item.id === "epis" && stockAlerts > 0 && <span className="nav-badge">{stockAlerts}</span>}
@@ -2670,6 +2937,7 @@ export default function App() {
         </div>
         <div className="main">
           <div className="topbar">
+            <button className="menu-btn" onClick={() => setSidebarOpen(o => !o)}>☰</button>
             <div><div className="topbar-title">{title}</div><div className="topbar-sub">{sub}</div></div>
             <div className="topbar-right">
               {(stockAlerts > 0 || pendentes > 0) && (<div className="alert alert-warning" style={{ padding: "6px 12px", margin: 0, fontSize: 12 }}>⚠️ {stockAlerts + pendentes} alerta{(stockAlerts + pendentes) !== 1 ? "s" : ""}</div>)}
@@ -2680,8 +2948,8 @@ export default function App() {
             {page === "dashboard" && <Dashboard epis={epis} funcionarios={funcionarios} entregas={entregas} onNav={setPage} />}
             {page === "nova-entrega" && <NovaEntregaPage epis={epis} setEpis={handleSetEpis} funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} entregas={entregas} setEntregas={handleSetEntregas} toast={toast} onNav={setPage} />}
             {page === "cancelar-entrega" && <CancelarEntregaPage entregas={entregas} setEntregas={handleSetEntregas} toast={toast} />}
-            {page === "entregas" && <EntregasPage entregas={entregas} setEntregas={handleSetEntregas} toast={toast} />}
-            {page === "funcionarios" && <FuncionariosPage funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} cargos={cargos} toast={toast} />}
+            {page === "entregas" && <EntregasPage entregas={entregas} setEntregas={handleSetEntregas} epis={epis} toast={toast} />}
+            {page === "funcionarios" && <FuncionariosPage funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} onAddFuncionario={criarFuncionario} cargos={cargos} toast={toast} />}
             {page === "cargos" && <CargosPage cargos={cargos} setCargos={setCargos} toast={toast} />}
             {page === "epis" && <EpisPage epis={epis} setEpis={handleSetEpis} toast={toast} />}
             {page === "biometria" && <BiometriaPage funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} toast={toast} />}
