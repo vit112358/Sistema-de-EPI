@@ -329,9 +329,6 @@ function LoginPage({ onLogin, users }) {
         <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center", padding: 11 }} onClick={submit} disabled={loading}>
           {loading ? <><span className="pulse">●</span> Autenticando...</> : "Entrar"}
         </button>
-        <div style={{ marginTop: 14, padding: "10px 14px", background: "var(--surface2)", borderRadius: 8, fontSize: 11, fontFamily: "IBM Plex Mono", color: "var(--text3)" }}>
-          Demo: admin / admin123
-        </div>
       </div>
     </div>
   );

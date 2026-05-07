@@ -109,17 +109,10 @@ export function atualizarStatusEntrega(id: number, dados: Partial<Entrega>): Pro
     });
 }
 
-// DELETE
+// DELETE — entrega_itens é removido via ON DELETE CASCADE
 export function deletarEntrega(id: number): Promise<void> {
     return new Promise((resolve, reject) => {
-        const sql = `DELETE FROM entregas WHERE id = ?`;
-        db.run(sql, [id], function (err) {
-            if (err) reject(err);
-            else resolve();
-        });
-
-        const sql2 = `DELETE FROM entrega_itens WHERE entrega_id = ?`;
-        db.run(sql2, [id], function (err) {
+        db.run(`DELETE FROM entregas WHERE id = ?`, [id], function (err) {
             if (err) reject(err);
             else resolve();
         });

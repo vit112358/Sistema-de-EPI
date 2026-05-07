@@ -10,7 +10,16 @@ app.listen(PORT, '0.0.0.0', () => {
 });
 
 // Middleware para permitir que o frontend converse com o backend
-app.use(cors());
+app.use(cors({
+    origin: [
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+        'https://segurid.com.br',
+        'http://segurid.com.br',
+        'http://163.176.188.254',
+    ],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+}));
 // Middleware para entender JSON no corpo das requisições (POST)
 app.use(express.json());
 
