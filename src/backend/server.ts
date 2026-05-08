@@ -1,16 +1,18 @@
 import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha} from './crud.ts';
 
 const app = express();
 const PORT = 3000;
+const JWT_SECRET = process.env.JWT_SECRET ?? 'epi-seguranca-2024-jwt-secret-key';
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Backend rodando em http://localhost:${PORT} (e acessível na rede local)`);
 });
 
-// Middleware para permitir que o frontend converse com o backend
 app.use(cors({
     origin: [
         'http://localhost:5173',
@@ -21,10 +23,76 @@ app.use(cors({
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
 }));
-// Middleware para entender JSON no corpo das requisições (POST)
 app.use(express.json());
 
-// Rota para listar todas as entregas
+// ─── Login (rota pública) ─────────────────────────────────────────────────────
+
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    message: { error: 'Muitas tentativas. Tente novamente em 15 minutos.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
+    try {
+        const { username, senha } = req.body as { username?: string; senha?: string };
+        if (!username || !senha) return res.status(400).json({ error: 'Credenciais inválidas' });
+
+        const users = await listarUsuarios();
+        const user = users.find(u => u.username === username);
+
+        if (!user) {
+            await bcrypt.compare('dummy', '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ012');
+            return res.status(401).json({ error: 'Credenciais inválidas' });
+        }
+
+        let valido = false;
+        if (user.senha.startsWith('$2')) {
+            valido = await bcrypt.compare(senha, user.senha);
+        } else {
+            valido = user.senha === senha;
+            if (valido && user.id) {
+                const hash = await bcrypt.hash(senha, 10);
+                await atualizarHashSenha(user.id, hash);
+            }
+        }
+
+        if (!valido) return res.status(401).json({ error: 'Credenciais inválidas' });
+
+        const { senha: _s, ...userSemSenha } = user;
+        const token = jwt.sign(
+            { id: userSemSenha.id, username: userSemSenha.username, role: userSemSenha.role },
+            JWT_SECRET,
+            { expiresIn: '8h' }
+        );
+        res.json({ ...userSemSenha, token });
+    } catch {
+        res.status(500).json({ error: 'Erro interno' });
+    }
+});
+
+// ─── Middleware JWT (todas as rotas abaixo exigem token válido) ───────────────
+
+const autenticar = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const header = req.headers.authorization;
+    if (!header?.startsWith('Bearer ')) {
+        res.status(401).json({ error: 'Não autorizado' });
+        return;
+    }
+    try {
+        (req as any).usuario = jwt.verify(header.slice(7), JWT_SECRET);
+        next();
+    } catch {
+        res.status(401).json({ error: 'Token inválido ou expirado' });
+    }
+};
+
+app.use(autenticar);
+
+// ─── Entregas ─────────────────────────────────────────────────────────────────
+
 app.get('/api/entregas', async (_req, res) => {
     try {
         const entregas = await listarEntregas();
@@ -46,7 +114,6 @@ app.post('/api/entregas', async (req, res) => {
     }
 });
 
-// Rota para atualizar uma entrega existente (ex: Assinar ou Cancelar)
 app.put('/api/entregas/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id);
@@ -58,7 +125,8 @@ app.put('/api/entregas/:id', async (req, res) => {
     }
 });
 
-// Rotas Funcionários
+// ─── Funcionários ─────────────────────────────────────────────────────────────
+
 app.get('/api/funcionarios', async (_req, res) => {
     try {
         const funcionarios = await listarFuncionarios();
@@ -102,7 +170,8 @@ app.delete('/api/funcionarios/:id', async (req, res) => {
     }
 });
 
-// Rotas EPIs
+// ─── EPIs ─────────────────────────────────────────────────────────────────────
+
 app.get('/api/epis', async (_req, res) => {
     try {
         const epis = await listarEpis();
@@ -145,7 +214,8 @@ app.delete('/api/epis/:id', async (req, res) => {
     }
 });
 
-// Rotas Cargos
+// ─── Cargos ───────────────────────────────────────────────────────────────────
+
 app.get('/api/cargos', async (_req, res) => {
     try { res.json(await listarCargos()); }
     catch (error) { res.status(500).json({ error: 'Erro ao buscar cargos' }); }
@@ -163,7 +233,8 @@ app.delete('/api/cargos/:id', async (req, res) => {
     catch (error) { res.status(500).json({ error: 'Erro ao deletar cargo' }); }
 });
 
-// Rotas Biometrias
+// ─── Biometrias ───────────────────────────────────────────────────────────────
+
 app.post('/api/biometrias', async (req, res) => {
     try {
         const id = await salvarBiometria(req.body);
@@ -196,43 +267,8 @@ app.delete('/api/biometrias/:id', async (req, res) => {
     }
 });
 
-// ─── Autenticação ─────────────────────────────────────────────────────────────
-app.post('/api/auth/login', async (req, res) => {
-    try {
-        const { username, senha } = req.body as { username?: string; senha?: string };
-        if (!username || !senha) return res.status(400).json({ error: 'Credenciais inválidas' });
+// ─── Usuários ─────────────────────────────────────────────────────────────────
 
-        const users = await listarUsuarios();
-        const user = users.find(u => u.username === username);
-
-        // Resposta genérica para não revelar se o usuário existe
-        if (!user) {
-            await bcrypt.compare('dummy', '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ012');
-            return res.status(401).json({ error: 'Credenciais inválidas' });
-        }
-
-        let valido = false;
-        if (user.senha.startsWith('$2')) {
-            valido = await bcrypt.compare(senha, user.senha);
-        } else {
-            // Senha ainda em texto plano (banco legado) — valida e migra
-            valido = user.senha === senha;
-            if (valido && user.id) {
-                const hash = await bcrypt.hash(senha, 10);
-                await atualizarHashSenha(user.id, hash);
-            }
-        }
-
-        if (!valido) return res.status(401).json({ error: 'Credenciais inválidas' });
-
-        const { senha: _s, ...userSemSenha } = user;
-        res.json(userSemSenha);
-    } catch {
-        res.status(500).json({ error: 'Erro interno' });
-    }
-});
-
-// ─── Rotas Usuários ───────────────────────────────────────────────────────────
 app.get('/api/users', async (_req, res) => {
     try {
         const users = await listarUsuarios();

@@ -3,6 +3,7 @@ import { jsPDF } from "jspdf";
 import type { Entrega, Epi, Funcionario, Toast, TipoAssinatura } from "../types";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { declaracaoCompletaEpi, addDays, fmtDate } from "../helpers";
+import { apiFetch } from "../api";
 import {
   compareDescriptors, descriptorToJson, extractDescriptor,
   isCurrentModelDescriptor, jsonToDescriptor
@@ -67,7 +68,7 @@ function SignModal({ entrega, funcionarios, currentUserRole, onClose, onSign }: 
           score = compareDescriptors(refDesc, capturedDesc);
           if (bioFacial.id) {
             const newDescJson = descriptorToJson(refDesc);
-            fetch(`/api/biometrias/${bioFacial.id}/descriptor`, {
+            apiFetch(`/api/biometrias/${bioFacial.id}/descriptor`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ descriptor_json: newDescJson }),

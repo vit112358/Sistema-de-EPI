@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Usuario, Toast } from "../types";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { apiFetch } from "../api";
 
 interface Props {
   users: Usuario[];
@@ -35,11 +36,11 @@ export function CadastroUsuariosPage({ users, setUsers, currentUser, toast }: Pr
       if (editing) {
         const payload: Partial<Usuario> = { nome: form.nome, username: form.username, role: form.role };
         if (form.senha) (payload as Record<string, string>).senha = form.senha;
-        await fetch(`/api/users/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        await apiFetch(`/api/users/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         setUsers(prev => prev.map(u => u.id === editing.id ? { ...u, ...payload } : u));
         toast("Usuário atualizado!", "success");
       } else {
-        const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+        const res = await apiFetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
         const data = await res.json();
         setUsers(prev => [...prev, { ...form, id: data.id }]);
         toast("Usuário criado!", "success");
@@ -53,7 +54,7 @@ export function CadastroUsuariosPage({ users, setUsers, currentUser, toast }: Pr
     const admins = users.filter(x => x.role === "admin");
     if (u.role === "admin" && admins.length === 1) { toast("Deve existir ao menos um administrador", "error"); return; }
     try {
-      await fetch(`/api/users/${u.id}`, { method: 'DELETE' });
+      await apiFetch(`/api/users/${u.id}`, { method: 'DELETE' });
     } catch { toast("Erro ao remover usuário", "error"); return; }
     setUsers(prev => prev.filter(x => x.id !== u.id));
     toast("Usuário removido", "success");

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Cargo, Toast } from "../types";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { apiFetch } from "../api";
 
 interface Props {
   cargos: Cargo[];
@@ -20,13 +21,13 @@ export function CargosPage({ cargos, setCargos, toast }: Props) {
   const save = () => {
     if (!nome.trim()) return;
     if (editing) {
-      fetch(`/api/cargos/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: nome.trim() }) })
+      apiFetch(`/api/cargos/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: nome.trim() }) })
         .catch(() => {});
       setCargos(prev => prev.map(c => c.id === editing.id ? { ...c, nome: nome.trim() } : c));
       toast("Cargo atualizado!", "success");
     } else {
       const tempId = Date.now();
-      fetch('/api/cargos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: nome.trim() }) })
+      apiFetch('/api/cargos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: nome.trim() }) })
         .then(r => r.json()).then(data => setCargos(prev => prev.map(c => c.id === tempId ? { ...c, id: data.id } : c)))
         .catch(() => {});
       setCargos(prev => [...prev, { id: tempId, nome: nome.trim() }]);
@@ -36,7 +37,7 @@ export function CargosPage({ cargos, setCargos, toast }: Props) {
   };
 
   const del = (c: Cargo) => {
-    fetch(`/api/cargos/${c.id}`, { method: 'DELETE' }).catch(() => {});
+    apiFetch(`/api/cargos/${c.id}`, { method: 'DELETE' }).catch(() => {});
     setCargos(prev => prev.filter(x => x.id !== c.id));
     setConfirmDel(null);
     toast("Cargo removido!", "success");

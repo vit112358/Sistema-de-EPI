@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { jsPDF } from "jspdf";
 import type { Epi, Funcionario, Entrega, EntregaItem, Toast, TipoAssinatura } from "../types";
 import { declaracaoCompletaEpi, addDays, fmtDate } from "../helpers";
+import { apiFetch } from "../api";
 import {
   compareDescriptors, descriptorToJson, extractDescriptor,
   isCurrentModelDescriptor, jsonToDescriptor
@@ -86,7 +87,7 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
           score = compareDescriptors(refDesc, capturedDesc);
           if (bio.id) {
             const newDescJson = descriptorToJson(refDesc);
-            fetch(`/api/biometrias/${bio.id}/descriptor`, {
+            apiFetch(`/api/biometrias/${bio.id}/descriptor`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ descriptor_json: newDescJson }),
