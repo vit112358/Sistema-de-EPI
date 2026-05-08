@@ -1,6 +1,7 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcryptjs';
 
 // Recriando __filename e __dirname para módulos ES
 const __filename = fileURLToPath(import.meta.url);
@@ -116,8 +117,10 @@ export function inicializarBancoDeDados() {
             // seed: garante que sempre exista ao menos um admin
             db.get(`SELECT COUNT(*) as total FROM usuarios`, [], (_e, row: any) => {
                 if (row?.total === 0) {
-                    db.run(`INSERT INTO usuarios (nome, username, senha, role) VALUES (?, ?, ?, ?)`,
-                        ['Administrador', 'admin', 'admin123', 'admin']);
+                    bcrypt.hash('admin123', 10).then(hash => {
+                        db.run(`INSERT INTO usuarios (nome, username, senha, role) VALUES (?, ?, ?, ?)`,
+                            ['Administrador', 'admin', hash, 'admin']);
+                    });
                 }
             });
         });

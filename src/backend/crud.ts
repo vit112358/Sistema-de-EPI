@@ -1,4 +1,5 @@
 import db from './database.ts';
+import bcrypt from 'bcryptjs';
 
 export interface EntregaItem {
     epi_id: number;
@@ -332,26 +333,35 @@ export function listarUsuarios(): Promise<Usuario[]> {
     });
 }
 
-export function criarUsuario(u: Usuario): Promise<number> {
+export async function criarUsuario(u: Usuario): Promise<number> {
+    const hash = await bcrypt.hash(u.senha!, 10);
     return new Promise((resolve, reject) => {
         db.run(`INSERT INTO usuarios (nome, username, senha, role) VALUES (?, ?, ?, ?)`,
-            [u.nome, u.username, u.senha, u.role], function (err) {
+            [u.nome, u.username, hash, u.role], function (err) {
                 if (err) reject(err); else resolve(this.lastID);
             });
     });
 }
 
-export function atualizarUsuario(id: number, dados: Partial<Usuario>): Promise<void> {
+export async function atualizarUsuario(id: number, dados: Partial<Usuario>): Promise<void> {
+    const fields: string[] = [];
+    const values: (string | number)[] = [];
+    if (dados.nome !== undefined)     { fields.push('nome = ?');     values.push(dados.nome); }
+    if (dados.username !== undefined) { fields.push('username = ?'); values.push(dados.username); }
+    if (dados.senha)                  { fields.push('senha = ?');    values.push(await bcrypt.hash(dados.senha, 10)); }
+    if (dados.role !== undefined)     { fields.push('role = ?');     values.push(dados.role); }
+    if (fields.length === 0) return;
+    values.push(id);
     return new Promise((resolve, reject) => {
-        const fields: string[] = [];
-        const values: any[] = [];
-        if (dados.nome !== undefined)     { fields.push('nome = ?');     values.push(dados.nome); }
-        if (dados.username !== undefined) { fields.push('username = ?'); values.push(dados.username); }
-        if (dados.senha !== undefined)    { fields.push('senha = ?');    values.push(dados.senha); }
-        if (dados.role !== undefined)     { fields.push('role = ?');     values.push(dados.role); }
-        if (fields.length === 0) return resolve();
-        values.push(id);
         db.run(`UPDATE usuarios SET ${fields.join(', ')} WHERE id = ?`, values, function (err) {
+            if (err) reject(err); else resolve();
+        });
+    });
+}
+
+export function atualizarHashSenha(id: number, hash: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        db.run(`UPDATE usuarios SET senha = ? WHERE id = ?`, [hash, id], function (err) {
             if (err) reject(err); else resolve();
         });
     });

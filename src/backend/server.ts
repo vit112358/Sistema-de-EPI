@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
-import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario} from './crud.ts';
+import bcrypt from 'bcryptjs';
+import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha} from './crud.ts';
 
 const app = express();
 const PORT = 3000;
@@ -24,7 +25,7 @@ app.use(cors({
 app.use(express.json());
 
 // Rota para listar todas as entregas
-app.get('/api/entregas', async (req, res) => {
+app.get('/api/entregas', async (_req, res) => {
     try {
         const entregas = await listarEntregas();
         res.json(entregas);
@@ -58,7 +59,7 @@ app.put('/api/entregas/:id', async (req, res) => {
 });
 
 // Rotas Funcionários
-app.get('/api/funcionarios', async (req, res) => {
+app.get('/api/funcionarios', async (_req, res) => {
     try {
         const funcionarios = await listarFuncionarios();
         res.json(funcionarios);
@@ -102,7 +103,7 @@ app.delete('/api/funcionarios/:id', async (req, res) => {
 });
 
 // Rotas EPIs
-app.get('/api/epis', async (req, res) => {
+app.get('/api/epis', async (_req, res) => {
     try {
         const epis = await listarEpis();
         res.json(epis);
@@ -145,7 +146,7 @@ app.delete('/api/epis/:id', async (req, res) => {
 });
 
 // Rotas Cargos
-app.get('/api/cargos', async (req, res) => {
+app.get('/api/cargos', async (_req, res) => {
     try { res.json(await listarCargos()); }
     catch (error) { res.status(500).json({ error: 'Erro ao buscar cargos' }); }
 });
@@ -195,29 +196,68 @@ app.delete('/api/biometrias/:id', async (req, res) => {
     }
 });
 
-// Rotas Usuários
-app.get('/api/users', async (req, res) => {
-    try { res.json(await listarUsuarios()); }
-    catch (error) { res.status(500).json({ error: 'Erro ao buscar usuários' }); }
+// ─── Autenticação ─────────────────────────────────────────────────────────────
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { username, senha } = req.body as { username?: string; senha?: string };
+        if (!username || !senha) return res.status(400).json({ error: 'Credenciais inválidas' });
+
+        const users = await listarUsuarios();
+        const user = users.find(u => u.username === username);
+
+        // Resposta genérica para não revelar se o usuário existe
+        if (!user) {
+            await bcrypt.compare('dummy', '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ012');
+            return res.status(401).json({ error: 'Credenciais inválidas' });
+        }
+
+        let valido = false;
+        if (user.senha.startsWith('$2')) {
+            valido = await bcrypt.compare(senha, user.senha);
+        } else {
+            // Senha ainda em texto plano (banco legado) — valida e migra
+            valido = user.senha === senha;
+            if (valido && user.id) {
+                const hash = await bcrypt.hash(senha, 10);
+                await atualizarHashSenha(user.id, hash);
+            }
+        }
+
+        if (!valido) return res.status(401).json({ error: 'Credenciais inválidas' });
+
+        const { senha: _s, ...userSemSenha } = user;
+        res.json(userSemSenha);
+    } catch {
+        res.status(500).json({ error: 'Erro interno' });
+    }
+});
+
+// ─── Rotas Usuários ───────────────────────────────────────────────────────────
+app.get('/api/users', async (_req, res) => {
+    try {
+        const users = await listarUsuarios();
+        res.json(users.map(({ senha: _s, ...u }) => u));
+    } catch { res.status(500).json({ error: 'Erro ao buscar usuários' }); }
 });
 
 app.post('/api/users', async (req, res) => {
     try {
         const id = await criarUsuario(req.body);
-        res.status(201).json({ id, ...req.body });
-    } catch (error) { res.status(500).json({ error: 'Erro ao criar usuário' }); }
+        const { senha: _s, ...semSenha } = req.body;
+        res.status(201).json({ id, ...semSenha });
+    } catch { res.status(500).json({ error: 'Erro ao criar usuário' }); }
 });
 
 app.put('/api/users/:id', async (req, res) => {
     try {
         await atualizarUsuario(parseInt(req.params.id), req.body);
         res.json({ success: true });
-    } catch (error) { res.status(500).json({ error: 'Erro ao atualizar usuário' }); }
+    } catch { res.status(500).json({ error: 'Erro ao atualizar usuário' }); }
 });
 
 app.delete('/api/users/:id', async (req, res) => {
     try {
         await deletarUsuario(parseInt(req.params.id));
         res.json({ success: true });
-    } catch (error) { res.status(500).json({ error: 'Erro ao deletar usuário' }); }
+    } catch { res.status(500).json({ error: 'Erro ao deletar usuário' }); }
 });

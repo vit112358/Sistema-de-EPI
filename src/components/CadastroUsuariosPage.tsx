@@ -1,0 +1,135 @@
+import { useState } from "react";
+import type { Usuario, Toast } from "../types";
+import { ConfirmDialog } from "./ConfirmDialog";
+
+interface Props {
+  users: Usuario[];
+  setUsers: (action: React.SetStateAction<Usuario[]>) => void;
+  currentUser: Usuario;
+  toast: (msg: string, type?: Toast['type']) => void;
+}
+
+interface FormState {
+  nome: string;
+  username: string;
+  senha: string;
+  role: string;
+}
+
+export function CadastroUsuariosPage({ users, setUsers, currentUser, toast }: Props) {
+  const [modal, setModal] = useState(false);
+  const [editing, setEditing] = useState<Usuario | null>(null);
+  const [form, setForm] = useState<FormState>({ nome: "", username: "", senha: "", role: "operador" });
+  const [confirm, setConfirm] = useState<Usuario | null>(null);
+
+  const openNew = () => { setForm({ nome: "", username: "", senha: "", role: "operador" }); setEditing(null); setModal(true); };
+  const openEdit = (u: Usuario) => { setForm({ nome: u.nome, username: u.username, senha: "", role: u.role }); setEditing(u); setModal(true); };
+
+  const save = async () => {
+    if (!form.nome.trim() || !form.username.trim() || (!editing && !form.senha.trim())) {
+      toast("Preencha todos os campos obrigatórios", "error"); return;
+    }
+    const dup = users.find(u => u.username === form.username && u.id !== editing?.id);
+    if (dup) { toast("Username já existe", "error"); return; }
+    try {
+      if (editing) {
+        const payload: Partial<Usuario> = { nome: form.nome, username: form.username, role: form.role };
+        if (form.senha) (payload as Record<string, string>).senha = form.senha;
+        await fetch(`/api/users/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        setUsers(prev => prev.map(u => u.id === editing.id ? { ...u, ...payload } : u));
+        toast("Usuário atualizado!", "success");
+      } else {
+        const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+        const data = await res.json();
+        setUsers(prev => [...prev, { ...form, id: data.id }]);
+        toast("Usuário criado!", "success");
+      }
+    } catch { toast("Erro ao salvar usuário", "error"); }
+    setModal(false);
+  };
+
+  const del = async (u: Usuario) => {
+    if (u.id === currentUser.id) { toast("Não é possível excluir o usuário atual", "error"); return; }
+    const admins = users.filter(x => x.role === "admin");
+    if (u.role === "admin" && admins.length === 1) { toast("Deve existir ao menos um administrador", "error"); return; }
+    try {
+      await fetch(`/api/users/${u.id}`, { method: 'DELETE' });
+    } catch { toast("Erro ao remover usuário", "error"); return; }
+    setUsers(prev => prev.filter(x => x.id !== u.id));
+    toast("Usuário removido", "success");
+    setConfirm(null);
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}>
+        <button className="btn btn-primary" onClick={openNew}>+ Novo Usuário</button>
+      </div>
+      <div className="card">
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Nome</th><th>Username</th><th>Perfil</th><th></th></tr></thead>
+            <tbody>
+              {users.map(u => (
+                <tr key={u.id}>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>{u.nome}</div>
+                    {u.id === currentUser.id && <span className="badge badge-orange" style={{ marginTop: 4 }}>Você</span>}
+                  </td>
+                  <td><span style={{ fontFamily: "IBM Plex Mono", fontSize: 12 }}>{u.username}</span></td>
+                  <td>{u.role === "admin" ? <span className="badge badge-purple">Admin</span> : <span className="badge badge-gray">Operador</span>}</td>
+                  <td>
+                    <div className="action-btns">
+                      <button className="btn btn-ghost btn-xs" onClick={() => openEdit(u)}>✏️ Editar</button>
+                      {u.id !== currentUser.id && <button className="btn btn-danger btn-xs" onClick={() => setConfirm(u)}>🗑</button>}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {modal && (
+        <div className="modal-overlay" onClick={() => setModal(false)}>
+          <div className="modal" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">{editing ? "Editar Usuário" : "Novo Usuário"}</span>
+              <button className="close-btn" onClick={() => setModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="input-group"><label className="input-label">Nome *</label><input className="input" value={form.nome} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, nome: e.target.value }))} /></div>
+              <div className="input-group"><label className="input-label">Username *</label><input className="input" value={form.username} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, username: e.target.value }))} /></div>
+              <div className="input-group">
+                <label className="input-label">Senha {editing ? "(deixe em branco para manter)" : "*"}</label>
+                <input className="input" type="password" value={form.senha} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, senha: e.target.value }))} />
+              </div>
+              <div className="input-group">
+                <label className="input-label">Perfil</label>
+                <select className="input" value={form.role} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm(p => ({ ...p, role: e.target.value }))}>
+                  <option value="admin">Administrador</option>
+                  <option value="operador">Operador</option>
+                </select>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setModal(false)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={save}>💾 Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {confirm && (
+        <ConfirmDialog
+          icon="🗑"
+          title="Excluir usuário?"
+          desc={`Tem certeza que deseja remover "${confirm.nome}"?`}
+          danger
+          confirmLabel="Excluir"
+          onConfirm={() => del(confirm)}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+    </div>
+  );
+}
