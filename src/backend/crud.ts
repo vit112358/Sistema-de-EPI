@@ -381,6 +381,35 @@ export function deletarUsuario(id: number): Promise<void> {
     });
 }
 
+// ── RATE LIMITING (login) ─────────────────────────────────────────────────────
+
+export function bloqueadoPorRateLimit(ip: string): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+        db.get(
+            `SELECT COUNT(*) as total FROM login_attempts WHERE ip = ? AND momento > datetime('now', '-15 minutes')`,
+            [ip],
+            (err, row: any) => {
+                if (err) reject(err);
+                else resolve((row?.total ?? 0) >= 5);
+            }
+        );
+    });
+}
+
+export function registrarFalhaLogin(ip: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        db.run(`INSERT INTO login_attempts (ip) VALUES (?)`, [ip], (err) => {
+            if (err) reject(err); else resolve();
+        });
+    });
+}
+
+export function limparTentativasLogin(ip: string): Promise<void> {
+    return new Promise((resolve) => {
+        db.run(`DELETE FROM login_attempts WHERE ip = ?`, [ip], () => resolve());
+    });
+}
+
 // CREATE Biometria
 export function salvarBiometria(b: Biometria): Promise<number> {
     return new Promise((resolve, reject) => {

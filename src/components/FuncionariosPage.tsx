@@ -63,6 +63,14 @@ export function FuncionariosPage({ funcionarios, setFuncionarios, onAddFuncionar
   const [confirmDel, setConfirmDel] = useState<Funcionario | null>(null);
 
   const saveFunc = async (f: Funcionario) => {
+    if (!f.nome.trim() || !f.matricula.trim() || !f.email.trim() || !f.telefone.trim()) {
+      toast("Preencha nome, matrícula, e-mail e telefone", "error");
+      return;
+    }
+    if (!f.cargo) {
+      toast("Selecione um cargo", "error");
+      return;
+    }
     if (f.id) {
       setFuncionarios(prev => prev.map(x => x.id === f.id ? { ...x, ...f } : x));
       toast("Dados atualizados!", "success");

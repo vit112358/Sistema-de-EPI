@@ -1,7 +1,10 @@
-let _token: string | null = null;
+let _token: string | null = sessionStorage.getItem('epi_token');
 let _onUnauthorized: (() => void) | null = null;
 
-export function setToken(t: string | null) { _token = t; }
+export function setToken(t: string | null) {
+  _token = t;
+  t ? sessionStorage.setItem('epi_token', t) : sessionStorage.removeItem('epi_token');
+}
 export function getToken() { return _token; }
 export function onUnauthorized(cb: () => void) { _onUnauthorized = cb; }
 

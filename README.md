@@ -227,3 +227,20 @@ server {
 como subir
 npx vite build
 bash deploy.sh --skip-build
+
+---                                                                                                                                                                                                                                                                                                         
+#2 — apiFetch fora do setState (App.tsx)
+Os três handlers (handleSetEntregas, handleSetFuncionarios, handleSetEpis) foram refatorados. Agora leem o estado atual via entregasRef.current / funcionariosRef.current / episRef.current (refs que espelham o state a cada render), computam o diff e disparam os apiFetch antes de chamar               
+setEntregas/setFuncionarios/setEpis(next) — que agora é uma chamada pura sem side-effects. Em criarFuncionario foi adicionado funcionariosEnviadosRef.current.add(data.id) para garantir que o dedup guard cobre esse caminho também (#8).
+
+#4 — Token sumindo no refresh (api.ts)                                                                                                                                                                                                                                                                      
+_token agora inicia com sessionStorage.getItem('epi_token'). setToken() sincroniza com o sessionStorage. Refresh da página preserva a sessão enquanto a aba estiver aberta.
+
+#5 — 413 silencioso no POST de biometria (server.ts + BiometriaPage.tsx)
+express.json({ limit: '2mb' }) resolve o limite de 100 KB. Além disso, a biometria facial agora só envia imagem_base64 quando não há descriptor_json — economiza ~300 KB na requisição quando o reconhecimento funcionou.
+
+#6 — deleteBio atualizava UI mesmo com falha (BiometriaPage.tsx)
+setFuncionarios e o toast agora ficam dentro do try, após confirmação de res.ok. Se a API falhar, a biometria permanece na lista e um toast de erro é exibido.
+
+#7 — Rate limiter zerado no restart (database.ts + crud.ts + server.ts)
+Tabela login_attempts no SQLite registra IP e timestamp de cada falha. O login handler consulta (bloqueadoPorRateLimit), registra falhas (registrarFalhaLogin) e limpa no sucesso (limparTentativasLogin). Persiste entre restarts do PM2/deploy.

@@ -91,6 +91,14 @@ const INIT_USUARIOS = `
   );
 `;
 
+const INIT_LOGIN_ATTEMPTS = `
+  CREATE TABLE IF NOT EXISTS login_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip TEXT NOT NULL,
+    momento DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`;
+
 const INIT_EPIS = `
   CREATE TABLE IF NOT EXISTS epis (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,6 +121,11 @@ export function inicializarBancoDeDados() {
     db.serialize(() => {
         db.run('PRAGMA foreign_keys=ON');
         db.run('PRAGMA journal_mode=WAL');
+
+        db.run(INIT_LOGIN_ATTEMPTS, (err) => {
+            if (err) console.error('Erro ao criar tabela login_attempts:', err.message);
+            else db.run(`DELETE FROM login_attempts WHERE momento <= datetime('now', '-15 minutes')`);
+        });
 
         db.run(INIT_USUARIOS, (err) => {
             if (err) { console.error('Erro ao criar tabela de usuarios:', err.message); return; }
@@ -161,6 +174,13 @@ export function inicializarBancoDeDados() {
                 console.error('Erro ao criar tabela de funcionarios:', err.message);
             } else {
                 console.log('Tabela "funcionarios" verificada/criada com sucesso.');
+                db.all(`PRAGMA table_info(funcionarios)`, [], (_e, cols: any[]) => {
+                    const names = cols.map((c: any) => c.name);
+                    if (!names.includes('email'))
+                        db.run(`ALTER TABLE funcionarios ADD COLUMN email TEXT NOT NULL DEFAULT ''`);
+                    if (!names.includes('telefone'))
+                        db.run(`ALTER TABLE funcionarios ADD COLUMN telefone TEXT NOT NULL DEFAULT ''`);
+                });
             }
         });
 

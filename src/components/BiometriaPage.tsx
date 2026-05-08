@@ -253,7 +253,7 @@ export function BiometriaPage({ funcionarios, setFuncionarios, toast }: Props) {
         clearInterval(iv);
         setTimeout(async () => {
           const qualidade = descriptor_json ? 99 : +(90 + Math.random() * 9).toFixed(1);
-          const novaBio: Biometria = { funcionario_id: func!.id!, tipo: type!, data: new Date().toISOString().split("T")[0], qualidade, imagem_base64: imagemBase64, descriptor_json };
+          const novaBio: Biometria = { funcionario_id: func!.id!, tipo: type!, data: new Date().toISOString().split("T")[0], qualidade, imagem_base64: descriptor_json ? null : imagemBase64, descriptor_json };
           try {
             const res = await apiFetch('/api/biometrias', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novaBio) });
             const data = await res.json();
@@ -276,12 +276,14 @@ export function BiometriaPage({ funcionarios, setFuncionarios, toast }: Props) {
 
   const deleteBio = async (bioId: number, funcId: number) => {
     try {
-      await apiFetch(`/api/biometrias/${bioId}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/biometrias/${bioId}`, { method: 'DELETE' });
+      if (!res.ok) { toast("Erro ao excluir biometria.", "error"); setConfirm(null); return; }
+      setFuncionarios(prev => prev.map(f => f.id === funcId ? { ...f, biometrias: f.biometrias.filter((b: Biometria) => b.id !== bioId) } : f));
+      toast("Biometria excluída.", "info");
     } catch (err) {
       console.error('Erro ao deletar biometria', err);
+      toast("Erro ao excluir biometria.", "error");
     }
-    setFuncionarios(prev => prev.map(f => f.id === funcId ? { ...f, biometrias: f.biometrias.filter((b: Biometria) => b.id !== bioId) } : f));
-    toast("Biometria excluída.", "info");
     setConfirm(null);
   };
 

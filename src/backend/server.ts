@@ -3,7 +3,7 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha} from './crud.ts';
+import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha, bloqueadoPorRateLimit, registrarFalhaLogin, limparTentativasLogin} from './crud.ts';
 
 const app = express();
 const PORT = 3000;
@@ -23,7 +23,7 @@ app.use(cors({
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
 }));
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 
 // ─── Login (rota pública) ─────────────────────────────────────────────────────
 
@@ -36,15 +36,20 @@ const loginLimiter = rateLimit({
 });
 
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.ip ?? 'unknown';
     try {
         const { username, senha } = req.body as { username?: string; senha?: string };
         if (!username || !senha) return res.status(400).json({ error: 'Credenciais inválidas' });
+
+        if (await bloqueadoPorRateLimit(ip))
+            return res.status(429).json({ error: 'Muitas tentativas. Tente novamente em 15 minutos.' });
 
         const users = await listarUsuarios();
         const user = users.find(u => u.username === username);
 
         if (!user) {
             await bcrypt.compare('dummy', '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ012');
+            await registrarFalhaLogin(ip);
             return res.status(401).json({ error: 'Credenciais inválidas' });
         }
 
@@ -59,8 +64,12 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
             }
         }
 
-        if (!valido) return res.status(401).json({ error: 'Credenciais inválidas' });
+        if (!valido) {
+            await registrarFalhaLogin(ip);
+            return res.status(401).json({ error: 'Credenciais inválidas' });
+        }
 
+        await limparTentativasLogin(ip);
         const { senha: _s, ...userSemSenha } = user;
         const token = jwt.sign(
             { id: userSemSenha.id, username: userSemSenha.username, role: userSemSenha.role },
@@ -142,9 +151,16 @@ app.post('/api/funcionarios', async (req, res) => {
         const novoFuncionario = req.body;
         const id = await criarFuncionario(novoFuncionario);
         res.status(201).json({ id, ...novoFuncionario, biometrias: [] });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Erro ao criar funcionário:', error);
-        res.status(500).json({ error: 'Erro ao criar funcionário' });
+        const msg: string = error?.message ?? '';
+        if (msg.includes('UNIQUE') && msg.includes('email'))
+            return res.status(409).json({ error: 'Este e-mail já está cadastrado' });
+        if (msg.includes('UNIQUE') && msg.includes('telefone'))
+            return res.status(409).json({ error: 'Este telefone já está cadastrado' });
+        if (msg.includes('UNIQUE'))
+            return res.status(409).json({ error: 'Dados duplicados: ' + msg });
+        res.status(500).json({ error: 'Erro ao criar funcionário: ' + msg });
     }
 });
 

@@ -68,6 +68,14 @@ export default function App() {
   const funcionariosEnviadosRef = useRef<Set<number>>(new Set());
   const episEnviadosRef        = useRef<Set<number>>(new Set());
 
+  // Refs that mirror state so handlers can compute diffs outside setState callbacks
+  const entregasRef    = useRef<Entrega[]>([]);
+  const funcionariosRef = useRef<Funcionario[]>([]);
+  const episRef        = useRef<Epi[]>([]);
+  entregasRef.current    = entregas;
+  funcionariosRef.current = funcionarios;
+  episRef.current        = epis;
+
   useEffect(() => {
     onUnauthorized(() => {
       setToken(null);
@@ -101,97 +109,93 @@ export default function App() {
   // ── Backend-synced setters ──────────────────────────────────────────────────
 
   const handleSetEntregas = (acao: React.SetStateAction<Entrega[]>) => {
-    setEntregas(prev => {
-      const next = typeof acao === 'function' ? acao(prev) : acao;
+    const prev = entregasRef.current;
+    const next = typeof acao === 'function' ? acao(prev) : acao;
 
-      if (next.length > prev.length) {
-        const nova = next[0];
-        if (nova?.funcionario && nova.id && !entregasEnviadasRef.current.has(nova.id)) {
-          entregasEnviadasRef.current.add(nova.id);
-          const tempId = nova.id;
-          apiFetch('/api/entregas', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              funcionario_id: nova.funcionario_id, funcionario: nova.funcionario,
-              status: nova.status, tipo_assinatura: nova.tipo_assinatura,
-              confianca: nova.confianca, data: nova.data, itens: nova.itens,
-            }),
+    if (next.length > prev.length) {
+      const nova = next[0];
+      if (nova?.funcionario && nova.id && !entregasEnviadasRef.current.has(nova.id)) {
+        entregasEnviadasRef.current.add(nova.id);
+        const tempId = nova.id;
+        apiFetch('/api/entregas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            funcionario_id: nova.funcionario_id, funcionario: nova.funcionario,
+            status: nova.status, tipo_assinatura: nova.tipo_assinatura,
+            confianca: nova.confianca, data: nova.data, itens: nova.itens,
+          }),
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (data.id && data.id !== tempId)
+              setEntregas(prev => prev.map(e => e.id === tempId ? { ...e, id: data.id } : e));
+            apiFetch('/api/epis').then(r => r.json()).then((updated: Epi[]) => setEpis(updated));
           })
-            .then(r => r.json())
-            .then(data => {
-              if (data.id && data.id !== tempId) {
-                setEntregas(prev => prev.map(e => e.id === tempId ? { ...e, id: data.id } : e));
-              }
-              apiFetch('/api/epis').then(r => r.json()).then((updated: Epi[]) => setEpis(updated));
+          .catch(err => console.error("Falha ao salvar no banco:", err));
+      }
+    } else if (next.length === prev.length) {
+      for (const nova of next) {
+        const velha = prev.find(e => e.id === nova.id);
+        if (velha && nova.status !== velha.status) {
+          apiFetch(`/api/entregas/${nova.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: nova.status, tipo_assinatura: nova.tipo_assinatura, confianca: nova.confianca }),
+          })
+            .then(() => {
+              if (nova.status === 'cancelado')
+                apiFetch('/api/epis').then(r => r.json()).then((updated: Epi[]) => setEpis(updated));
             })
-            .catch(err => console.error("Falha ao salvar no banco:", err));
-        }
-      } else if (next.length === prev.length) {
-        for (const nova of next) {
-          const velha = prev.find(e => e.id === nova.id);
-          if (velha && nova.status !== velha.status) {
-            apiFetch(`/api/entregas/${nova.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status: nova.status, tipo_assinatura: nova.tipo_assinatura, confianca: nova.confianca }),
-            })
-              .then(() => {
-                if (nova.status === 'cancelado') {
-                  apiFetch('/api/epis').then(r => r.json()).then((updated: Epi[]) => setEpis(updated));
-                }
-              })
-              .catch(err => console.error('Erro ao atualizar status no banco', err));
-          }
+            .catch(err => console.error('Erro ao atualizar status no banco', err));
         }
       }
+    }
 
-      return next;
-    });
+    setEntregas(next);
   };
 
   const handleSetFuncionarios = (acao: React.SetStateAction<Funcionario[]>) => {
-    setFuncionarios(prev => {
-      const next = typeof acao === 'function' ? acao(prev) : acao;
+    const prev = funcionariosRef.current;
+    const next = typeof acao === 'function' ? acao(prev) : acao;
 
-      if (next.length > prev.length) {
-        const novo = next.find(n => !prev.some(a => a.id === n.id));
-        if (novo?.id && !funcionariosEnviadosRef.current.has(novo.id)) {
-          funcionariosEnviadosRef.current.add(novo.id);
-          apiFetch('/api/funcionarios', {
-            method: 'POST',
+    if (next.length > prev.length) {
+      const novo = next.find(n => !prev.some(a => a.id === n.id));
+      if (novo?.id && !funcionariosEnviadosRef.current.has(novo.id)) {
+        funcionariosEnviadosRef.current.add(novo.id);
+        apiFetch('/api/funcionarios', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nome: novo.nome, matricula: novo.matricula, setor: novo.setor, cargo: novo.cargo, email: novo.email, telefone: novo.telefone }),
+        })
+          .then(r => r.json())
+          .then(data => console.log("Funcionário salvo no banco, BD_ID:", data.id))
+          .catch(err => console.error("Falha ao salvar funcionário no banco:", err));
+      }
+    } else if (next.length === prev.length) {
+      for (const novo of next) {
+        const velho = prev.find(f => f.id === novo.id);
+        if (velho && (novo.nome !== velho.nome || novo.setor !== velho.setor || novo.cargo !== velho.cargo || novo.matricula !== velho.matricula || novo.email !== velho.email || novo.telefone !== velho.telefone)) {
+          apiFetch(`/api/funcionarios/${novo.id}`, {
+            method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nome: novo.nome, matricula: novo.matricula, setor: novo.setor, cargo: novo.cargo, email: novo.email, telefone: novo.telefone }),
+            body: JSON.stringify(novo),
           })
-            .then(r => r.json())
-            .then(data => console.log("Funcionário salvo no banco, BD_ID:", data.id))
-            .catch(err => console.error("Falha ao salvar funcionário no banco:", err));
-        }
-      } else if (next.length === prev.length) {
-        for (const novo of next) {
-          const velho = prev.find(f => f.id === novo.id);
-          if (velho && (novo.nome !== velho.nome || novo.setor !== velho.setor || novo.cargo !== velho.cargo || novo.matricula !== velho.matricula || novo.email !== velho.email || novo.telefone !== velho.telefone)) {
-            apiFetch(`/api/funcionarios/${novo.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(novo),
-            })
-              .then(() => console.log(`Funcionário ID ${novo.id} atualizado no banco.`))
-              .catch(err => console.error('Erro ao atualizar funcionário', err));
-          }
-        }
-      } else {
-        for (const velho of prev) {
-          if (!next.some(f => f.id === velho.id)) {
-            apiFetch(`/api/funcionarios/${velho.id}`, { method: 'DELETE' })
-              .then(() => console.log(`Funcionário ID ${velho.id} deletado no banco.`))
-              .catch(err => console.error('Erro ao deletar funcionário', err));
-          }
+            .then(() => console.log(`Funcionário ID ${novo.id} atualizado no banco.`))
+            .catch(err => console.error('Erro ao atualizar funcionário', err));
         }
       }
+    } else {
+      for (const velho of prev) {
+        if (!next.some(f => f.id === velho.id)) {
+          apiFetch(`/api/funcionarios/${velho.id}`, { method: 'DELETE' })
+            .then(() => console.log(`Funcionário ID ${velho.id} deletado no banco.`))
+            .catch(err => console.error('Erro ao deletar funcionário', err));
+        }
+      }
+    }
 
-      return next;
-    });
+    setFuncionarios(next);
   };
 
   const criarFuncionario = async (funcData: Omit<Funcionario, 'id' | 'biometrias'>): Promise<{ ok: boolean; error?: string }> => {
@@ -203,6 +207,7 @@ export default function App() {
       });
       const data = await res.json();
       if (!res.ok) return { ok: false, error: data.error || 'Erro ao criar funcionário' };
+      funcionariosEnviadosRef.current.add(data.id);
       setFuncionarios(prev => [...prev, { ...funcData, id: data.id, biometrias: [] }]);
       return { ok: true };
     } catch {
@@ -211,47 +216,46 @@ export default function App() {
   };
 
   const handleSetEpis = (acao: React.SetStateAction<Epi[]>) => {
-    setEpis(prev => {
-      const next = typeof acao === 'function' ? acao(prev) : acao;
+    const prev = episRef.current;
+    const next = typeof acao === 'function' ? acao(prev) : acao;
 
-      if (next.length > prev.length) {
-        const novo = next.find(n => !prev.some(a => a.id === n.id));
-        if (novo?.id && !episEnviadosRef.current.has(novo.id)) {
-          episEnviadosRef.current.add(novo.id);
-          apiFetch('/api/epis', {
-            method: 'POST',
+    if (next.length > prev.length) {
+      const novo = next.find(n => !prev.some(a => a.id === n.id));
+      if (novo?.id && !episEnviadosRef.current.has(novo.id)) {
+        episEnviadosRef.current.add(novo.id);
+        apiFetch('/api/epis', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nome: novo.nome, ca: novo.ca, cas_json: novo.cas_json ?? null, categoria: novo.categoria, estoque: novo.estoque, minimo: novo.minimo, validade: novo.validade, img: novo.img, periodicidade: novo.periodicidade, descricao: novo.descricao, norma: novo.norma, fabricante: novo.fabricante }),
+        })
+          .then(r => r.json())
+          .then(data => console.log("EPI salvo no banco com sucesso, BD_ID:", data.id))
+          .catch(err => console.error("Falha ao salvar EPI no banco:", err));
+      }
+    } else if (next.length === prev.length) {
+      for (const novo of next) {
+        const velho = prev.find(e => e.id === novo.id);
+        if (velho && (novo.nome !== velho.nome || novo.ca !== velho.ca || novo.estoque !== velho.estoque || novo.minimo !== velho.minimo || novo.categoria !== velho.categoria || novo.fabricante !== velho.fabricante)) {
+          apiFetch(`/api/epis/${novo.id}`, {
+            method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nome: novo.nome, ca: novo.ca, cas_json: novo.cas_json ?? null, categoria: novo.categoria, estoque: novo.estoque, minimo: novo.minimo, validade: novo.validade, img: novo.img, periodicidade: novo.periodicidade, descricao: novo.descricao, norma: novo.norma, fabricante: novo.fabricante }),
+            body: JSON.stringify(novo),
           })
-            .then(r => r.json())
-            .then(data => console.log("EPI salvo no banco com sucesso, BD_ID:", data.id))
-            .catch(err => console.error("Falha ao salvar EPI no banco:", err));
-        }
-      } else if (next.length === prev.length) {
-        for (const novo of next) {
-          const velho = prev.find(e => e.id === novo.id);
-          if (velho && (novo.nome !== velho.nome || novo.ca !== velho.ca || novo.estoque !== velho.estoque || novo.minimo !== velho.minimo || novo.categoria !== velho.categoria || novo.fabricante !== velho.fabricante)) {
-            apiFetch(`/api/epis/${novo.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(novo),
-            })
-              .then(() => console.log(`EPI ID ${novo.id} atualizado no banco.`))
-              .catch(err => console.error('Erro ao atualizar EPI', err));
-          }
-        }
-      } else {
-        for (const velho of prev) {
-          if (!next.some(e => e.id === velho.id)) {
-            apiFetch(`/api/epis/${velho.id}`, { method: 'DELETE' })
-              .then(() => console.log(`EPI ID ${velho.id} deletado no banco.`))
-              .catch(err => console.error('Erro ao deletar EPI', err));
-          }
+            .then(() => console.log(`EPI ID ${novo.id} atualizado no banco.`))
+            .catch(err => console.error('Erro ao atualizar EPI', err));
         }
       }
+    } else {
+      for (const velho of prev) {
+        if (!next.some(e => e.id === velho.id)) {
+          apiFetch(`/api/epis/${velho.id}`, { method: 'DELETE' })
+            .then(() => console.log(`EPI ID ${velho.id} deletado no banco.`))
+            .catch(err => console.error('Erro ao deletar EPI', err));
+        }
+      }
+    }
 
-      return next;
-    });
+    setEpis(next);
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
