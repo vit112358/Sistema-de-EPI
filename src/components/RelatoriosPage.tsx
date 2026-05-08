@@ -13,12 +13,19 @@ export function RelatoriosPage({ epis, entregas }: Props) {
   const manual = entregas.filter(e => e.tipo_assinatura === "manual").length;
   const pct = (v: number) => total ? ((v / total) * 100).toFixed(0) : 0;
 
+  const confFacial = entregas
+    .filter(e => e.tipo_assinatura === "facial" && e.confianca != null)
+    .map(e => e.confianca as number);
+  const mediaConfianca = confFacial.length
+    ? (confFacial.reduce((a, b) => a + b, 0) / confFacial.length).toFixed(1) + "%"
+    : "—";
+
   return (
     <div>
       <div className="stats-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
         {[
           { label: "Taxa de Conformidade", value: pct(assinados) + "%", color: "green", icon: "✅" },
-          { label: "Confiança Média Biométrica", value: "95.4%", color: "orange", icon: "📊" },
+          { label: "Confiança Média Facial", value: mediaConfianca, color: "orange", icon: "📊" },
           { label: "Total de Entregas", value: total, color: "blue", icon: "📋" },
         ].map((s, i) => (
           <div key={i} className={`stat-card ${s.color}`}>

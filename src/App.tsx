@@ -99,6 +99,7 @@ export default function App() {
         const nova = next[0];
         if (nova?.funcionario && nova.id && !entregasEnviadasRef.current.has(nova.id)) {
           entregasEnviadasRef.current.add(nova.id);
+          const tempId = nova.id;
           fetch('/api/entregas', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -110,7 +111,9 @@ export default function App() {
           })
             .then(r => r.json())
             .then(data => {
-              console.log("Salvo no SQLite com sucesso, BD_ID:", data.id);
+              if (data.id && data.id !== tempId) {
+                setEntregas(prev => prev.map(e => e.id === tempId ? { ...e, id: data.id } : e));
+              }
               fetch('/api/epis').then(r => r.json()).then((updated: Epi[]) => setEpis(updated));
             })
             .catch(err => console.error("Falha ao salvar no banco:", err));

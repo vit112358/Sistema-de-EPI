@@ -56,25 +56,28 @@ export function criarEntrega(entrega: Entrega): Promise<number> {
     });
 }
 
-// READ (Listar todas com seus itens)
+// READ (Listar todas com seus itens — JOIN via subquery correlacionada)
 export function listarEntregas(): Promise<Entrega[]> {
     return new Promise((resolve, reject) => {
-        const sql = `SELECT * FROM entregas ORDER BY id DESC`;
-        db.all(sql, [], (err, entregasRows: any[]) => {
+        const sql = `
+            SELECT e.*,
+                (SELECT json_group_array(json_object(
+                    'id',         ei.id,
+                    'entrega_id', ei.entrega_id,
+                    'epi_id',     ei.epi_id,
+                    'nome',       ei.nome,
+                    'img',        ei.img,
+                    'qtd',        ei.qtd,
+                    'ca',         ei.ca
+                )) FROM entrega_itens ei WHERE ei.entrega_id = e.id) AS itens_json
+            FROM entregas e ORDER BY e.id DESC
+        `;
+        db.all(sql, [], (err, rows: any[]) => {
             if (err) return reject(err);
-
-            const sqlItens = `SELECT * FROM entrega_itens`;
-            db.all(sqlItens, [], (errItens, itensRows: any[]) => {
-                if (errItens) return reject(errItens);
-
-                // Agrupa os itens dentro das entregas
-                const entregasCompletas = entregasRows.map(entrega => ({
-                    ...entrega,
-                    itens: itensRows.filter(item => item.entrega_id === entrega.id)
-                }));
-
-                resolve(entregasCompletas);
-            });
+            resolve(rows.map(({ itens_json, ...rest }) => ({
+                ...rest,
+                itens: itens_json ? JSON.parse(itens_json) : [],
+            })));
         });
     });
 }
@@ -151,25 +154,28 @@ export function criarFuncionario(funcionario: Funcionario): Promise<number> {
     });
 }
 
-// READ Funcionarios
+// READ Funcionarios — sem imagem_base64 (dado pesado); JOIN via subquery correlacionada
 export function listarFuncionarios(): Promise<Funcionario[]> {
     return new Promise((resolve, reject) => {
-        const sql = `SELECT * FROM funcionarios ORDER BY id DESC`;
+        const sql = `
+            SELECT f.*,
+                (SELECT json_group_array(json_object(
+                    'id',             b.id,
+                    'funcionario_id', b.funcionario_id,
+                    'tipo',           b.tipo,
+                    'data',           b.data,
+                    'qualidade',      b.qualidade,
+                    'descriptor_json',b.descriptor_json
+                )) FROM biometrias b WHERE b.funcionario_id = f.id) AS biometrias_json
+            FROM funcionarios f ORDER BY f.id DESC
+        `;
         db.all(sql, [], (err, rows: any[]) => {
             if (err) return reject(err);
-
-            const sqlBios = `SELECT * FROM biometrias`;
-            db.all(sqlBios, [], (errBios, biosRows: any[]) => {
-                if (errBios) return reject(errBios);
-
-                const funcCompletos = rows.map(f => ({
-                    ...f,
-                    admissao: f.data_admissao,
-                    biometrias: biosRows.filter(b => b.funcionario_id === f.id)
-                }));
-
-                resolve(funcCompletos);
-            });
+            resolve(rows.map(({ biometrias_json, ...f }) => ({
+                ...f,
+                admissao: f.data_admissao,
+                biometrias: biometrias_json ? JSON.parse(biometrias_json) : [],
+            })));
         });
     });
 }

@@ -111,6 +111,9 @@ const INIT_EPIS = `
 // Função para inicializar o banco de dados
 export function inicializarBancoDeDados() {
     db.serialize(() => {
+        db.run('PRAGMA foreign_keys=ON');
+        db.run('PRAGMA journal_mode=WAL');
+
         db.run(INIT_USUARIOS, (err) => {
             if (err) { console.error('Erro ao criar tabela de usuarios:', err.message); return; }
             console.log('Tabela "usuarios" verificada/criada com sucesso.');

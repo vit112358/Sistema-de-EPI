@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { jsPDF } from "jspdf";
 import type { Entrega, Funcionario } from "../types";
-import { COMPANY_CONFIG } from "../helpers";
+import { declaracaoTermoEpi } from "../helpers";
 
 interface Props {
   entregas: Entrega[];
@@ -83,11 +83,7 @@ export function EpisPorFuncionarioPage({ entregas, funcionarios }: Props) {
     y += 7;
 
     // ── Declaração ─────────────────────────────────────────────────────────────
-    const decl =
-      `Declaro que recebi treinamento, instrução sobre uso correto dos EPI's na empresa ${COMPANY_CONFIG.nome}, para meu uso em caráter ` +
-      `obrigatório, os equipamentos descritos abaixo, os quais me comprometo a utilizá-los devidamente durante o tempo em que permanecer ` +
-      `na empresa, observando as medidas gerais de disciplinas que integram a NR-06 – EPI – Equipamentos de Proteção Individual da ` +
-      `Portaria 3.214 de 08/06/78`;
+    const decl = declaracaoTermoEpi();
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);

@@ -1,8 +1,8 @@
 import { useState, useRef } from "react";
 import { jsPDF } from "jspdf";
-import type { Entrega, Epi, Funcionario, Toast } from "../types";
+import type { Entrega, Epi, Funcionario, Toast, TipoAssinatura } from "../types";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { COMPANY_CONFIG, addDays, fmtDate } from "../helpers";
+import { declaracaoCompletaEpi, addDays, fmtDate } from "../helpers";
 import {
   compareDescriptors, descriptorToJson, extractDescriptor,
   isCurrentModelDescriptor, jsonToDescriptor
@@ -14,7 +14,7 @@ interface SignModalProps {
   funcionarios: Funcionario[];
   currentUserRole: string;
   onClose: () => void;
-  onSign: (tipo: string, confianca: number | null) => void;
+  onSign: (tipo: TipoAssinatura, confianca: number | null) => void;
 }
 
 function SignModal({ entrega, funcionarios, currentUserRole, onClose, onSign }: SignModalProps) {
@@ -101,7 +101,7 @@ function SignModal({ entrega, funcionarios, currentUserRole, onClose, onSign }: 
       p += Math.random() * 15;
       if (p >= 100) {
         clearInterval(iv);
-        setTimeout(() => onSign(sigType!, sigType === "facial" ? faceScore : null), 400);
+        setTimeout(() => onSign(sigType! as TipoAssinatura, sigType === "facial" ? faceScore : null), 400);
       } else setProgress(p);
     }, 150);
   };
@@ -323,17 +323,7 @@ export function EntregasPage({ entregas, setEntregas, epis, funcionarios, curren
     y += 8;
 
     const nomeFuncionario = entrega.funcionario ?? "";
-    const declaracao =
-      `Eu, ${nomeFuncionario}, declaro para todos os efeitos previstos na legislação, haver recebido gratuitamente, conforme descrito na C.L.T. nos artigos 166, 167 e demais artigos adstritos à matéria, na NR - 6 e nos itens 1.4.2 e 1.5.5.1.2 da NR - 1 DISPOSIÇÕES GERAIS e GERENCIAMENTO DE RISCOS OCUPACIONAIS, após treinamento e orientação do uso adequado, aplicação, guarda, conservação, substituição e requisitos de higiene, em palestra realizada pelo Serviço Especializado em Segurança e Medicina do Trabalho da empresa, ${COMPANY_CONFIG.nome}, situada ${COMPANY_CONFIG.endereco}, o(s) equipamento(s) de proteção individual abaixo descrito(s) e designado(s) como EPIs, os quais obrigo-me a usá-lo(s) sistematicamente em meu trabalho, mediante ainda, os termos seguintes:\n\n` +
-      `a) O EPI será usado unicamente para finalidade a que se destina e qualquer alteração que o torne parcial ou totalmente danificado será por mim comunicado à empresa;\n\n` +
-      `b) Declaro que me responsabilizo pela guarda e conservação dos EPI's que me foram confiados e que, na impossibilidade de seu uso, deverei comunicar a chefia imediatamente, para as providências que se fizerem necessárias, e os devolverei após o vencimento de duração estipulada;\n\n` +
-      `c) Estou ciente e de pleno acordo que a falta de uso por mim, dos EPI's fornecidos pela Empresa, constitui Ato Faltoso, sujeito às sanções disciplinares previstas na legislação pertinente aos assuntos, Regulamento Interno e Normas de Segurança da Empresa;\n\n` +
-      `d) Reconhecendo expressamente que a sua não utilização configura em falta grave capitulada na letra "h", do Artigo 482 da C.L.T., como ato de indisciplina ou de insubordinação, ensejadora da rescisão do meu contrato de trabalho por justa causa;\n\n` +
-      `e) Autorizo expressamente a Empresa a proceder descontos nos meus salários, vencimentos, gratificações, indenizações, os valores dos EPI's que por ventura por mim forem:\n` +
-      `   - Danificados propositadamente;\n` +
-      `   - Extraviados;\n` +
-      `   - Não devolvidos à empresa para substituição;\n\n` +
-      `f) Tomei ciência e estou de acordo com os termos da declaração acima, assinando-a de livre e espontânea vontade, após sua leitura nessa data`;
+    const declaracao = declaracaoCompletaEpi(nomeFuncionario);
 
     doc.setFontSize(9);
     const linhas = doc.splitTextToSize(declaracao, contentW);
@@ -407,7 +397,7 @@ export function EntregasPage({ entregas, setEntregas, epis, funcionarios, curren
     doc.save(`ficha_epi_${nomeFuncionario.replace(/\s+/g, "_")}_${entrega.data}.pdf`);
   };
 
-  const doSign = (id: number | undefined, tipo: string, confianca: number | null) => {
+  const doSign = (id: number | undefined, tipo: TipoAssinatura, confianca: number | null) => {
     const entrega = entregas.find(e => e.id === id);
     setEntregas(prev => prev.map(e => e.id === id ? { ...e, status: "assinado", tipo_assinatura: tipo, confianca } : e));
     setSignModal(null);

@@ -45,12 +45,15 @@ export interface EntregaItem {
   ca?: string;
 }
 
+export type EntregaStatus   = "pendente_assinatura" | "assinado" | "cancelado";
+export type TipoAssinatura  = "facial" | "digital" | "manual";
+
 export interface Entrega {
   id?: number;
   funcionario_id: number;
   funcionario: string;
-  status: string;
-  tipo_assinatura?: string | null;
+  status: EntregaStatus;
+  tipo_assinatura?: TipoAssinatura | null;
   confianca?: number | null;
   data: string;
   itens: EntregaItem[];

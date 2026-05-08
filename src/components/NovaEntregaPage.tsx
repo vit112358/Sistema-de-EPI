@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { jsPDF } from "jspdf";
-import type { Epi, Funcionario, Entrega, EntregaItem, Toast } from "../types";
-import { COMPANY_CONFIG, addDays, fmtDate } from "../helpers";
+import type { Epi, Funcionario, Entrega, EntregaItem, Toast, TipoAssinatura } from "../types";
+import { declaracaoCompletaEpi, addDays, fmtDate } from "../helpers";
 import {
   compareDescriptors, descriptorToJson, extractDescriptor,
   isCurrentModelDescriptor, jsonToDescriptor
@@ -22,7 +22,7 @@ interface Props {
 
 type EpiCaItem = Epi & { itemKey: string; ca: string; validade: string };
 
-export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFuncionarios, entregas: _entregas, setEntregas, toast, onNav, currentUserRole }: Props) {
+export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFuncionarios, entregas, setEntregas, toast, onNav, currentUserRole }: Props) {
   const isAdmin = currentUserRole === "admin";
   const [step, setStep] = useState(0);
   const [func, setFunc] = useState<Funcionario | null>(null);
@@ -152,7 +152,7 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
         setTimeout(() => {
           const confianca = sigType === "facial" ? faceScore : null;
           const itens: EntregaItem[] = selEpis.map(e => ({ epi_id: e.id!, nome: e.nome, img: e.img ?? "", ca: e.ca, qtd: qtds[e.itemKey] || 1 }));
-          setEntregas(prev => [{ id: newId, funcionario_id: func!.id!, funcionario: func!.nome, data: new Date().toISOString().split("T")[0], itens, status: "assinado", tipo_assinatura: sigType, confianca }, ...prev]);
+          setEntregas(prev => [{ id: newId, funcionario_id: func!.id!, funcionario: func!.nome, data: new Date().toISOString().split("T")[0], itens, status: "assinado", tipo_assinatura: sigType as TipoAssinatura | null, confianca }, ...prev]);
           setSigning(false); setDone(true); setStep(4);
           toast("Entrega registrada e assinada!", "success");
         }, 500);
@@ -214,7 +214,8 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(120, 120, 120);
-    doc.text(`#${String(newId).slice(-6)} · ${new Date().toLocaleDateString("pt-BR")}`, pageW / 2, y, { align: "center" });
+    const fichaId = entregas[0]?.id ?? newId;
+    doc.text(`#${String(fichaId).padStart(4, "0")} · ${new Date().toLocaleDateString("pt-BR")}`, pageW / 2, y, { align: "center" });
     doc.setTextColor(0, 0, 0);
     y += 10;
 
@@ -223,17 +224,7 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
     y += 8;
 
     const nomeFuncionario = func?.nome ?? "";
-    const declaracao =
-      `Eu, ${nomeFuncionario}, declaro para todos os efeitos previstos na legislação, haver recebido gratuitamente, conforme descrito na C.L.T. nos artigos 166, 167 e demais artigos adstritos à matéria, na NR - 6 e nos itens 1.4.2 e 1.5.5.1.2 da NR - 1 DISPOSIÇÕES GERAIS e GERENCIAMENTO DE RISCOS OCUPACIONAIS, após treinamento e orientação do uso adequado, aplicação, guarda, conservação, substituição e requisitos de higiene, em palestra realizada pelo Serviço Especializado em Segurança e Medicina do Trabalho da empresa, ${COMPANY_CONFIG.nome}, situada ${COMPANY_CONFIG.endereco}, o(s) equipamento(s) de proteção individual abaixo descrito(s) e designado(s) como EPIs, os quais obrigo-me a usá-lo(s) sistematicamente em meu trabalho, mediante ainda, os termos seguintes:\n\n` +
-      `a) O EPI será usado unicamente para finalidade a que se destina e qualquer alteração que o torne parcial ou totalmente danificado será por mim comunicado à empresa;\n\n` +
-      `b) Declaro que me responsabilizo pela guarda e conservação dos EPI's que me foram confiados e que, na impossibilidade de seu uso, deverei comunicar a chefia imediatamente, para as providências que se fizerem necessárias, e os devolverei após o vencimento de duração estipulada;\n\n` +
-      `c) Estou ciente e de pleno acordo que a falta de uso por mim, dos EPI's fornecidos pela Empresa, constitui Ato Faltoso, sujeito às sanções disciplinares previstas na legislação pertinente aos assuntos, Regulamento Interno e Normas de Segurança da Empresa;\n\n` +
-      `d) Reconhecendo expressamente que a sua não utilização configura em falta grave capitulada na letra "h", do Artigo 482 da C.L.T., como ato de indisciplina ou de insubordinação, ensejadora da rescisão do meu contrato de trabalho por justa causa;\n\n` +
-      `e) Autorizo expressamente a Empresa a proceder descontos nos meus salários, vencimentos, gratificações, indenizações, os valores dos EPI's que por ventura por mim forem:\n` +
-      `   - Danificados propositadamente;\n` +
-      `   - Extraviados;\n` +
-      `   - Não devolvidos à empresa para substituição;\n\n` +
-      `f) Tomei ciência e estou de acordo com os termos da declaração acima, assinando-a de livre e espontânea vontade, após sua leitura nessa data`;
+    const declaracao = declaracaoCompletaEpi(nomeFuncionario);
 
     doc.setFontSize(9);
     const linhas = doc.splitTextToSize(declaracao, contentW);
@@ -350,7 +341,7 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
         : <div className="alert alert-success" style={{ marginBottom: 20 }}>✅ Entrega registrada e assinada com sucesso!</div>}
       <div className="card">
         <div className="card-header" style={{ background: "var(--surface2)" }}>
-          <div><div style={{ fontFamily: "Barlow Condensed", fontSize: 20, fontWeight: 800 }}>FICHA DE ENTREGA DE EPI</div><div style={{ fontSize: 11, fontFamily: "IBM Plex Mono", color: "var(--text3)" }}>#{String(newId).slice(-6)} · {new Date().toLocaleDateString("pt-BR")}</div></div>
+          <div><div style={{ fontFamily: "Barlow Condensed", fontSize: 20, fontWeight: 800 }}>FICHA DE ENTREGA DE EPI</div><div style={{ fontSize: 11, fontFamily: "IBM Plex Mono", color: "var(--text3)" }}>#{String(entregas[0]?.id ?? newId).padStart(4, "0")} · {new Date().toLocaleDateString("pt-BR")}</div></div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {!savedAsPending && <button className="btn btn-ghost btn-sm" onClick={exportarFicha}>⬇️ Exportar Ficha</button>}
             {savedAsPending
