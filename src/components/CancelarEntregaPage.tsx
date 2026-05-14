@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { Entrega, Toast } from "../types";
+import { fmtDateStr } from "../helpers";
 
 interface Props {
   entregas: Entrega[];
@@ -50,7 +51,7 @@ export function CancelarEntregaPage({ entregas, setEntregas, toast }: Props) {
                     {e.funcionario}
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>{e.data}</span>
+                    <span style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>{fmtDateStr(e.data)}</span>
                     <span className="badge badge-gray">{e.itens.length} item{e.itens.length !== 1 ? "s" : ""}</span>
                     {e.status === "assinado" && <span className="badge badge-green">✓ Assinado</span>}
                     {e.status === "pendente_assinatura" && <span className="badge badge-orange">⏳ Pendente</span>}

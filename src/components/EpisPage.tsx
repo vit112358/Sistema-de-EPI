@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Epi } from "../types";
 import type { Toast } from "../types";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { DateInput } from "./DateInput";
 
 interface EpiModalProps {
   epi: Epi;
@@ -49,8 +50,8 @@ function EpiModal({ epi, onClose, onSave, onDelete }: EpiModalProps) {
                 </div>
                 <div style={{ width: 160 }}>
                   {i === 0 && <label className="input-label" style={{ marginBottom: 4 }}>Vencimento do CA</label>}
-                  <input className="input" type="date" value={ca.validade}
-                    onChange={(ev: React.ChangeEvent<HTMLInputElement>) => setCas(p => p.map((c, j) => j === i ? { ...c, validade: ev.target.value } : c))} />
+                  <DateInput className="input" value={ca.validade}
+                    onChange={v => setCas(p => p.map((c, j) => j === i ? { ...c, validade: v } : c))} />
                 </div>
                 {cas.length > 1 && (
                   <button onClick={() => setCas(p => p.filter((_, j) => j !== i))}

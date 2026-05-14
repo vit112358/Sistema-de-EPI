@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { jsPDF } from "jspdf";
 import type { Funcionario, Biometria, Toast } from "../types";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { fmtDateStr } from "../helpers";
 import { extractDescriptor, descriptorToJson, detectLandmarks, computeEAR } from "../faceApi";
 import { apiFetch } from "../api";
 
@@ -468,7 +469,7 @@ export function BiometriaPage({ funcionarios, setFuncionarios, toast }: Props) {
                     <div style={{ fontSize: 22 }}>{b.tipo === "facial" ? "👤" : "👆"}</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600, fontSize: 13 }}>{b.tipo === "facial" ? "Biometria Facial" : "Impressão Digital"}</div>
-                      <div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>Cadastrada em {b.data} · Qualidade: {b.qualidade}%</div>
+                      <div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>Cadastrada em {fmtDateStr(b.data)} · Qualidade: {b.qualidade}%</div>
                     </div>
                     <span className="badge badge-green" style={{ marginRight: 8 }}>✓ Ativo</span>
                     <button className="btn btn-danger btn-xs" onClick={() => setConfirm({ bioId: b.id!, funcId: f.id!, funcNome: f.nome, tipo: b.tipo })}>🗑 Excluir</button>

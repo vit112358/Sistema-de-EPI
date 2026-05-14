@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Funcionario, Cargo, Toast } from "../types";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { DateInput } from "./DateInput";
 
 interface FuncModalProps {
   func: Funcionario;
@@ -26,7 +27,7 @@ function FuncModal({ func, cargos, onClose, onSave, onDelete }: FuncModalProps) 
           </div>
           <div className="input-row">
             <div className="input-group"><label className="input-label">Matrícula</label><input className="input" value={f.matricula} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setF(p => ({ ...p, matricula: e.target.value }))} /></div>
-            <div className="input-group"><label className="input-label">Data de Admissão</label><input className="input" type="date" value={f.admissao ?? ""} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setF(p => ({ ...p, admissao: e.target.value }))} /></div>
+            <div className="input-group"><label className="input-label">Data de Admissão</label><DateInput className="input" value={f.admissao ?? ""} onChange={v => setF(p => ({ ...p, admissao: v }))} /></div>
           </div>
           <div className="input-row">
             <div className="input-group"><label className="input-label">Setor</label><select className="input" value={f.setor} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setF(p => ({ ...p, setor: e.target.value }))}>{setores.map(s => <option key={s}>{s}</option>)}</select></div>

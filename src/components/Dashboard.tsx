@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { Epi, Funcionario, Entrega } from "../types";
+import { fmtDateStr } from "../helpers";
 
 interface Props {
   epis: Epi[];
@@ -39,7 +40,7 @@ export function Dashboard({ epis, funcionarios, entregas, onNav }: Props) {
               <tbody>
                 {entregas.slice(0, 4).map(e => (
                   <tr key={e.id}>
-                    <td><div style={{ fontWeight: 600, fontSize: 13 }}>{e.funcionario.split(" ").slice(0, 2).join(" ")}</div><div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>{e.data}</div></td>
+                    <td><div style={{ fontWeight: 600, fontSize: 13 }}>{e.funcionario.split(" ").slice(0, 2).join(" ")}</div><div style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>{fmtDateStr(e.data)}</div></td>
                     <td>
                       {e.status === "assinado" && <span className="badge badge-green">✓ Assinado</span>}
                       {e.status === "pendente_assinatura" && <span className="badge badge-orange">⏳ Pendente</span>}

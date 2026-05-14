@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { jsPDF } from "jspdf";
 import type { Entrega, Epi, Funcionario, Toast, TipoAssinatura } from "../types";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { declaracaoCompletaEpi, addDays, fmtDate } from "../helpers";
+import { declaracaoCompletaEpi, addDays, fmtDate, fmtDateStr } from "../helpers";
 import { apiFetch } from "../api";
 import {
   compareDescriptors, descriptorToJson, extractDescriptor,
@@ -156,7 +156,7 @@ function SignModal({ entrega, funcionarios, currentUserRole, onClose, onSign }: 
                   <div className="bio-option-title">{o.title}</div>
                   <div className="bio-option-desc">
                     {o.bio
-                      ? `Cadastrada em ${o.bio.data}${o.bio.qualidade ? ` · ${o.bio.qualidade}% qualidade` : ""}`
+                      ? `Cadastrada em ${fmtDateStr(o.bio.data)}${o.bio.qualidade ? ` · ${o.bio.qualidade}% qualidade` : ""}`
                       : "Assinatura manuscrita"}
                   </div>
                 </div>
@@ -502,7 +502,7 @@ export function EntregasPage({ entregas, setEntregas, epis, funcionarios, curren
                 <tr key={e.id}>
                   <td><span style={{ fontFamily: "IBM Plex Mono", color: "var(--text3)", fontSize: 12 }}>#{String(e.id).padStart(4,"0")}</span></td>
                   <td><span style={{ fontWeight: 600 }}>{e.funcionario.split(" ").slice(0,2).join(" ")}</span></td>
-                  <td><span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text3)" }}>{e.data}</span></td>
+                  <td><span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text3)" }}>{fmtDateStr(e.data)}</span></td>
                   <td><span className="badge badge-gray">{e.itens.length} item{e.itens.length !== 1 ? "s" : ""}</span></td>
                   <td>
                     {e.status === "assinado"            && <span className="badge badge-green">✓ Assinado</span>}

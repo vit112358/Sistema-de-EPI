@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Epi, Funcionario, Entrega } from "../types";
-import { addDays, daysUntil, fmtDate } from "../helpers";
+import { addDays, daysUntil, fmtDate, fmtDateStr } from "../helpers";
 
 interface Props {
   epis: Epi[];
@@ -70,7 +70,7 @@ export function RelatorioTrocaPage({ epis, funcionarios, entregas }: Props) {
       ["Funcionário", "Matrícula", "Setor", "EPI", "CA", "Periodicidade (dias)", "Última Entrega", "Próxima Troca", "Dias Restantes", "Status"],
       ...trocas.map(t => [
         t.func.nome, t.func.matricula, t.func.setor, t.epi.nome, t.epi.ca ?? "",
-        t.epi.periodicidade ?? "", t.dataEntrega, fmtDate(t.dataTroca), t.diasRestantes, statusLabel[t.urgencia],
+        t.epi.periodicidade ?? "", fmtDateStr(t.dataEntrega), fmtDate(t.dataTroca), t.diasRestantes, statusLabel[t.urgencia],
       ])
     ];
     const csv = "﻿" + linhas.map(l => l.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
@@ -147,7 +147,7 @@ export function RelatorioTrocaPage({ epis, funcionarios, entregas }: Props) {
                       <span style={{ fontFamily: "IBM Plex Mono", fontSize: 12 }}>{t.epi.periodicidade}d</span>
                       <div style={{ fontSize: 11, color: "var(--text3)" }}>(~{Math.round((t.epi.periodicidade ?? 0) / 30)} meses)</div>
                     </td>
-                    <td><span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text3)" }}>{t.dataEntrega}</span></td>
+                    <td><span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text3)" }}>{fmtDateStr(t.dataEntrega)}</span></td>
                     <td><span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, fontWeight: 600 }}>{fmtDate(t.dataTroca)}</span></td>
                     <td>
                       <span

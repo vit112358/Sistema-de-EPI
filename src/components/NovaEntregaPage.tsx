@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { jsPDF } from "jspdf";
 import type { Epi, Funcionario, Entrega, EntregaItem, Toast, TipoAssinatura } from "../types";
-import { declaracaoCompletaEpi, addDays, fmtDate } from "../helpers";
+import { declaracaoCompletaEpi, addDays, fmtDate, fmtDateStr } from "../helpers";
 import { apiFetch } from "../api";
 import {
   compareDescriptors, descriptorToJson, extractDescriptor,
@@ -530,7 +530,7 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
                       <div className="bio-option-title">{o.title}</div>
                       {o.bio
                         ? <div className="bio-option-desc">
-                          Cadastrada em {(o.bio as any).data}
+                          Cadastrada em {fmtDateStr((o.bio as any).data)}
                           {(o.bio as any).qualidade ? ` · ${(o.bio as any).qualidade}% qualidade` : ""}
                         </div>
                         : <div className="bio-option-desc" style={{ color: "var(--text3)" }}>Assinatura manuscrita</div>}

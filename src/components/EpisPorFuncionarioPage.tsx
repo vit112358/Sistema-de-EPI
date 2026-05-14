@@ -2,6 +2,7 @@ import { useState } from "react";
 import { jsPDF } from "jspdf";
 import type { Entrega, Funcionario } from "../types";
 import { declaracaoTermoEpi, COMPANY_CONFIG } from "../helpers";
+import { DateInput } from "./DateInput";
 
 interface Props {
   entregas: Entrega[];
@@ -210,17 +211,17 @@ export function EpisPorFuncionarioPage({ entregas, funcionarios }: Props) {
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div className="input-group" style={{ marginBottom: 0 }}>
               <label className="input-label">De</label>
-              <input
-                type="date" className="input" value={dataInicio}
-                onChange={e => { setDataInicio(e.target.value); setCurrentPage(1); }}
+              <DateInput
+                className="input" value={dataInicio}
+                onChange={v => { setDataInicio(v); setCurrentPage(1); }}
                 style={{ width: 160 }}
               />
             </div>
             <div className="input-group" style={{ marginBottom: 0 }}>
               <label className="input-label">Até</label>
-              <input
-                type="date" className="input" value={dataFim}
-                onChange={e => { setDataFim(e.target.value); setCurrentPage(1); }}
+              <DateInput
+                className="input" value={dataFim}
+                onChange={v => { setDataFim(v); setCurrentPage(1); }}
                 style={{ width: 160 }}
               />
             </div>

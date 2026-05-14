@@ -41,16 +41,18 @@ export function CadastroUsuariosPage({ users, setUsers, currentUser, toast }: Pr
       if (editing) {
         const payload: Partial<Usuario> = { nome: form.nome, username: form.username, role: form.role };
         if (form.senha) (payload as Record<string, string>).senha = form.senha;
-        await apiFetch(`/api/users/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const res = await apiFetch(`/api/users/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        if (!res.ok) { const d = await res.json(); toast(d.error || "Erro ao atualizar usuário", "error"); return; }
         setUsers(prev => prev.map(u => u.id === editing.id ? { ...u, ...payload } : u));
         toast("Usuário atualizado!", "success");
       } else {
         const res = await apiFetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
         const data = await res.json();
+        if (!res.ok) { toast(data.error || "Erro ao criar usuário", "error"); return; }
         setUsers(prev => [...prev, { ...form, id: data.id }]);
         toast("Usuário criado!", "success");
       }
-    } catch { toast("Erro ao salvar usuário", "error"); }
+    } catch { toast("Erro ao salvar usuário", "error"); return; }
     setModal(false);
   };
 

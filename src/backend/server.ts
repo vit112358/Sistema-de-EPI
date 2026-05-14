@@ -17,8 +17,12 @@ if (!process.env.JWT_SECRET) {
 }
 const JWT_SECRET: string = process.env.JWT_SECRET;
 
-// tokens revogados em memória (válido até o processo reiniciar; expira em 8h de qualquer forma)
-const revokedJtis = new Set<string>();
+// tokens revogados: Map<jti, expiryMs> — limpo a cada hora para remover JTIs já expirados
+const revokedJtis = new Map<string, number>();
+setInterval(() => {
+    const now = Date.now();
+    for (const [jti, exp] of revokedJtis) { if (exp < now) revokedJtis.delete(jti); }
+}, 60 * 60 * 1000);
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Backend rodando em http://localhost:${PORT} (e acessível na rede local)`);
@@ -42,6 +46,14 @@ const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 5,
     message: { error: 'Muitas tentativas. Tente novamente em 15 minutos.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+const changePwLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    limit: 5,
+    message: { error: 'Muitas tentativas de troca de senha. Aguarde 5 minutos.' },
     standardHeaders: true,
     legacyHeaders: false,
 });
@@ -99,7 +111,7 @@ app.post('/api/auth/logout', (req, res) => {
     if (token) {
         try {
             const payload = jwt.verify(token, JWT_SECRET) as any;
-            if (payload?.jti) revokedJtis.add(payload.jti);
+            if (payload?.jti) revokedJtis.set(payload.jti, (payload.exp ?? 0) * 1000);
         } catch { /* token já inválido, segue para limpar o cookie */ }
     }
     res.clearCookie('epi_session', { path: '/' });
@@ -108,7 +120,7 @@ app.post('/api/auth/logout', (req, res) => {
 
 // ─── Troca de senha obrigatória ───────────────────────────────────────────────
 
-app.post('/api/auth/change-password', async (req, res) => {
+app.post('/api/auth/change-password', changePwLimiter, async (req, res) => {
     const token = req.cookies?.epi_session;
     if (!token) return res.status(401).json({ error: 'Não autorizado' });
     let payload: any;
@@ -134,7 +146,7 @@ app.post('/api/auth/change-password', async (req, res) => {
         await registrarAuditoria('senha_alterada', 'usuario', user.id!, null, user.id!, user.username);
 
         // revoga token atual e emite novo sem trocar_senha
-        if (payload.jti) revokedJtis.add(payload.jti);
+        if (payload.jti) revokedJtis.set(payload.jti, (payload.exp ?? 0) * 1000);
         const novoJti = randomUUID();
         const novoToken = jwt.sign(
             { id: user.id, username: user.username, role: user.role, trocar_senha: 0, jti: novoJti },
@@ -213,17 +225,21 @@ function validarEntregaPost(b: any): string | null {
     if (!b.funcionario?.trim()) return 'funcionario é obrigatório';
     if (!/^\d{4}-\d{2}-\d{2}$/.test(b.data ?? '')) return 'data inválida (esperado YYYY-MM-DD)';
     if (!Array.isArray(b.itens) || b.itens.length === 0) return 'itens deve ser um array não vazio';
+    if (b.itens.length > 100) return 'máximo de 100 itens por entrega';
     return null;
 }
 
 function validarEntregaPut(b: any): string | null {
     if (b.status !== undefined && !STATUS_VALIDOS.includes(b.status)) return `status inválido; valores aceitos: ${STATUS_VALIDOS.join(', ')}`;
+    if (b.confianca !== undefined && b.confianca !== null && (typeof b.confianca !== 'number' || b.confianca < 0 || b.confianca > 100)) return 'confianca deve ser um número entre 0 e 100';
     return null;
 }
 
 function validarFuncionario(b: any): string | null {
     if (!b.nome?.trim()) return 'nome é obrigatório';
+    if (String(b.nome).length > 120) return 'nome deve ter no máximo 120 caracteres';
     if (!b.matricula?.trim()) return 'matrícula é obrigatória';
+    if (String(b.matricula).length > 40) return 'matrícula deve ter no máximo 40 caracteres';
     if (!b.setor?.trim()) return 'setor é obrigatório';
     if (!b.cargo?.trim()) return 'cargo é obrigatório';
     if (!b.email?.trim()) return 'email é obrigatório';
@@ -234,8 +250,11 @@ function validarFuncionario(b: any): string | null {
 
 function validarEpi(b: any): string | null {
     if (!b.nome?.trim()) return 'nome é obrigatório';
+    if (String(b.nome).length > 120) return 'nome deve ter no máximo 120 caracteres';
     if (typeof b.estoque !== 'number' || b.estoque < 0) return 'estoque deve ser um número >= 0';
     if (typeof b.minimo !== 'number' || b.minimo < 0) return 'minimo deve ser um número >= 0';
+    if (b.periodicidade !== undefined && b.periodicidade !== null && (typeof b.periodicidade !== 'number' || b.periodicidade < 1 || b.periodicidade > 3650)) return 'periodicidade deve ser entre 1 e 3650 dias';
+    if (b.descricao && String(b.descricao).length > 1000) return 'descrição deve ter no máximo 1000 caracteres';
     return null;
 }
 
@@ -243,6 +262,9 @@ function validarBiometria(b: any): string | null {
     if (!Number.isInteger(b.funcionario_id) || b.funcionario_id <= 0) return 'funcionario_id deve ser um inteiro positivo';
     if (!TIPOS_BIOMETRIA.includes(b.tipo)) return `tipo inválido; valores aceitos: ${TIPOS_BIOMETRIA.join(', ')}`;
     if (!b.data?.trim()) return 'data é obrigatória';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(b.data)) return 'data inválida (esperado YYYY-MM-DD)';
+    const d = new Date(b.data);
+    if (isNaN(d.getTime())) return 'data inválida';
     return null;
 }
 
@@ -252,9 +274,13 @@ function validarSenha(s: string): string | null {
     return null;
 }
 
+const RE_USERNAME = /^[a-zA-Z0-9_\-]{3,40}$/;
+
 function validarUsuarioPost(b: any): string | null {
     if (!b.nome?.trim()) return 'nome é obrigatório';
+    if (String(b.nome).length > 80) return 'nome deve ter no máximo 80 caracteres';
     if (!b.username?.trim()) return 'username é obrigatório';
+    if (!RE_USERNAME.test(b.username)) return 'username deve ter 3–40 caracteres (letras, números, _ ou -)';
     if (!b.senha?.trim()) return 'senha é obrigatória';
     const errSenha = validarSenha(b.senha);
     if (errSenha) return errSenha;
@@ -264,7 +290,9 @@ function validarUsuarioPost(b: any): string | null {
 
 function validarUsuarioPut(b: any): string | null {
     if (b.nome !== undefined && !String(b.nome).trim()) return 'nome não pode ser vazio';
+    if (b.nome !== undefined && String(b.nome).length > 80) return 'nome deve ter no máximo 80 caracteres';
     if (b.username !== undefined && !String(b.username).trim()) return 'username não pode ser vazio';
+    if (b.username !== undefined && !RE_USERNAME.test(b.username)) return 'username deve ter 3–40 caracteres (letras, números, _ ou -)';
     if (b.role !== undefined && !ROLES_VALIDOS.includes(b.role)) return `role inválido; valores aceitos: ${ROLES_VALIDOS.join(', ')}`;
     if (b.senha) { const errSenha = validarSenha(b.senha); if (errSenha) return errSenha; }
     return null;
@@ -512,8 +540,13 @@ app.get('/api/biometrias/:id/imagem', soOperadorOuAdmin, async (req, res) => {
 app.patch('/api/biometrias/:id/descriptor', soOperadorOuAdmin, async (req, res) => {
     const id = parseId(req.params.id);
     if (id === null) return res.status(400).json({ error: 'ID inválido' });
+    const dj = req.body.descriptor_json;
+    if (dj !== null && dj !== undefined) {
+        if (typeof dj !== 'string') return res.status(400).json({ error: 'descriptor_json deve ser uma string JSON' });
+        try { JSON.parse(dj); } catch { return res.status(400).json({ error: 'descriptor_json não é um JSON válido' }); }
+    }
     try {
-        await atualizarDescriptorBiometria(id, req.body.descriptor_json);
+        await atualizarDescriptorBiometria(id, dj);
         res.json({ success: true });
     } catch (error) {
         console.error('Erro ao atualizar descriptor:', error);

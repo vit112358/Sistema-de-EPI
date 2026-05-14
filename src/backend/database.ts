@@ -253,6 +253,7 @@ export function inicializarBancoDeDados() {
                         db.run(`ALTER TABLE entrega_itens ADD COLUMN ca TEXT`);
                     }
                 });
+                db.run(`CREATE INDEX IF NOT EXISTS idx_entrega_itens_entrega_id ON entrega_itens(entrega_id)`);
             }
         });
     });
