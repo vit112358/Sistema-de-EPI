@@ -71,6 +71,7 @@ export interface Usuario {
   username: string;
   senha?: string;
   role: string;
+  trocar_senha?: number;
 }
 
 export interface Toast {

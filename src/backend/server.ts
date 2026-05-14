@@ -75,7 +75,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
         const { senha: _s, ...userSemSenha } = user;
         const jti = randomUUID();
         const token = jwt.sign(
-            { id: userSemSenha.id, username: userSemSenha.username, role: userSemSenha.role, jti },
+            { id: userSemSenha.id, username: userSemSenha.username, role: userSemSenha.role, trocar_senha: userSemSenha.trocar_senha ?? 0, jti },
             JWT_SECRET,
             { expiresIn: '8h' }
         );
@@ -104,6 +104,54 @@ app.post('/api/auth/logout', (req, res) => {
     }
     res.clearCookie('epi_session', { path: '/' });
     res.json({ success: true });
+});
+
+// ─── Troca de senha obrigatória ───────────────────────────────────────────────
+
+app.post('/api/auth/change-password', async (req, res) => {
+    const token = req.cookies?.epi_session;
+    if (!token) return res.status(401).json({ error: 'Não autorizado' });
+    let payload: any;
+    try { payload = jwt.verify(token, JWT_SECRET); } catch { return res.status(401).json({ error: 'Token inválido' }); }
+    if (payload?.jti && revokedJtis.has(payload.jti)) return res.status(401).json({ error: 'Sessão encerrada' });
+
+    const { senha_atual, senha_nova } = req.body as { senha_atual?: string; senha_nova?: string };
+    if (!senha_atual?.trim() || !senha_nova?.trim()) return res.status(400).json({ error: 'senha_atual e senha_nova são obrigatórias' });
+    const errSenha = validarSenha(senha_nova);
+    if (errSenha) return res.status(400).json({ error: errSenha });
+
+    try {
+        const users = await listarUsuarios();
+        const user = users.find(u => u.id === payload.id);
+        if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
+
+        const valido = user.senha.startsWith('$2')
+            ? await bcrypt.compare(senha_atual, user.senha)
+            : user.senha === senha_atual;
+        if (!valido) return res.status(401).json({ error: 'Senha atual incorreta' });
+
+        await atualizarUsuario(user.id!, { senha: senha_nova, trocar_senha: 0 });
+        await registrarAuditoria('senha_alterada', 'usuario', user.id!, null, user.id!, user.username);
+
+        // revoga token atual e emite novo sem trocar_senha
+        if (payload.jti) revokedJtis.add(payload.jti);
+        const novoJti = randomUUID();
+        const novoToken = jwt.sign(
+            { id: user.id, username: user.username, role: user.role, trocar_senha: 0, jti: novoJti },
+            JWT_SECRET,
+            { expiresIn: '8h' }
+        );
+        res.cookie('epi_session', novoToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 8 * 60 * 60 * 1000,
+            path: '/',
+        });
+        res.json({ success: true });
+    } catch {
+        res.status(500).json({ error: 'Erro interno' });
+    }
 });
 
 // ─── Middleware JWT (todas as rotas abaixo exigem token válido) ───────────────
@@ -198,10 +246,18 @@ function validarBiometria(b: any): string | null {
     return null;
 }
 
+function validarSenha(s: string): string | null {
+    if (s.length < 8) return 'senha deve ter no mínimo 8 caracteres';
+    if (!/[\d!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(s)) return 'senha deve conter ao menos 1 número ou caractere especial';
+    return null;
+}
+
 function validarUsuarioPost(b: any): string | null {
     if (!b.nome?.trim()) return 'nome é obrigatório';
     if (!b.username?.trim()) return 'username é obrigatório';
     if (!b.senha?.trim()) return 'senha é obrigatória';
+    const errSenha = validarSenha(b.senha);
+    if (errSenha) return errSenha;
     if (!ROLES_VALIDOS.includes(b.role)) return `role inválido; valores aceitos: ${ROLES_VALIDOS.join(', ')}`;
     return null;
 }
@@ -210,6 +266,7 @@ function validarUsuarioPut(b: any): string | null {
     if (b.nome !== undefined && !String(b.nome).trim()) return 'nome não pode ser vazio';
     if (b.username !== undefined && !String(b.username).trim()) return 'username não pode ser vazio';
     if (b.role !== undefined && !ROLES_VALIDOS.includes(b.role)) return `role inválido; valores aceitos: ${ROLES_VALIDOS.join(', ')}`;
+    if (b.senha) { const errSenha = validarSenha(b.senha); if (errSenha) return errSenha; }
     return null;
 }
 

@@ -87,7 +87,8 @@ const INIT_USUARIOS = `
     nome TEXT NOT NULL,
     username TEXT NOT NULL UNIQUE,
     senha TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'operador'
+    role TEXT NOT NULL DEFAULT 'operador',
+    trocar_senha INTEGER NOT NULL DEFAULT 0
   );
 `;
 
@@ -148,12 +149,29 @@ export function inicializarBancoDeDados() {
         db.run(INIT_USUARIOS, (err) => {
             if (err) { console.error('Erro ao criar tabela de usuarios:', err.message); return; }
             console.log('Tabela "usuarios" verificada/criada com sucesso.');
+
+            // migration: adiciona trocar_senha se não existir (bancos criados antes desta versão)
+            db.all(`PRAGMA table_info(usuarios)`, [], (_e, cols: any[]) => {
+                if (!cols.some(c => c.name === 'trocar_senha')) {
+                    db.run(`ALTER TABLE usuarios ADD COLUMN trocar_senha INTEGER NOT NULL DEFAULT 0`, () => {
+                        // força troca em todos os usuários existentes
+                        db.run(`UPDATE usuarios SET trocar_senha = 1`);
+                    });
+                }
+            });
+
             // seed: garante que sempre exista ao menos um admin
             db.get(`SELECT COUNT(*) as total FROM usuarios`, [], (_e, row: any) => {
                 if (row?.total === 0) {
-                    bcrypt.hash('admin123', 10).then(hash => {
-                        db.run(`INSERT INTO usuarios (nome, username, senha, role) VALUES (?, ?, ?, ?)`,
-                            ['Administrador', 'admin', hash, 'admin']);
+                    const adminPassword = process.env.ADMIN_PASSWORD;
+                    if (!adminPassword) {
+                        console.error('FATAL: ADMIN_PASSWORD não está definida. Configure a variável de ambiente antes de iniciar o servidor.');
+                        process.exit(1);
+                    }
+                    bcrypt.hash(adminPassword, 10).then(hash => {
+                        db.run(`INSERT INTO usuarios (nome, username, senha, role, trocar_senha) VALUES (?, ?, ?, ?, ?)`,
+                            ['Administrador', 'admin', hash, 'admin', 1],
+                            () => console.log('✓ Admin criado. Usuário: admin — troque a senha no primeiro login.'));
                     });
                 }
             });

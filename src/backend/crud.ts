@@ -381,6 +381,7 @@ export interface Usuario {
     username: string;
     senha: string;
     role: string;
+    trocar_senha?: number;
 }
 
 export function listarUsuarios(): Promise<Usuario[]> {
@@ -404,10 +405,11 @@ export async function criarUsuario(u: Usuario): Promise<number> {
 export async function atualizarUsuario(id: number, dados: Partial<Usuario>): Promise<void> {
     const fields: string[] = [];
     const values: (string | number)[] = [];
-    if (dados.nome !== undefined)     { fields.push('nome = ?');     values.push(dados.nome); }
-    if (dados.username !== undefined) { fields.push('username = ?'); values.push(dados.username); }
-    if (dados.senha)                  { fields.push('senha = ?');    values.push(await bcrypt.hash(dados.senha, 10)); }
-    if (dados.role !== undefined)     { fields.push('role = ?');     values.push(dados.role); }
+    if (dados.nome !== undefined)         { fields.push('nome = ?');         values.push(dados.nome); }
+    if (dados.username !== undefined)     { fields.push('username = ?');     values.push(dados.username); }
+    if (dados.senha)                      { fields.push('senha = ?');        values.push(await bcrypt.hash(dados.senha, 10)); }
+    if (dados.role !== undefined)         { fields.push('role = ?');         values.push(dados.role); }
+    if (dados.trocar_senha !== undefined) { fields.push('trocar_senha = ?'); values.push(dados.trocar_senha); }
     if (fields.length === 0) return;
     values.push(id);
     return new Promise((resolve, reject) => {

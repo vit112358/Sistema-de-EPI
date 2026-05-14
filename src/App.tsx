@@ -20,6 +20,7 @@ import { RelatorioTrocaPage } from "./components/RelatorioTrocaPage";
 import { RelatoriosPage } from "./components/RelatoriosPage";
 import { EpisPorFuncionarioPage } from "./components/EpisPorFuncionarioPage";
 import { AuditLogPage } from "./components/AuditLogPage";
+import { TrocarSenhaPage } from "./components/TrocarSenhaPage";
 
 const NAV = [
   { id: "dashboard",          icon: "⬛", label: "Dashboard",            section: "PRINCIPAL"   },
@@ -276,6 +277,13 @@ export default function App() {
       <style>{css}</style>
       <LoginPage onLogin={(user) => { setCurrentUser(user); if (user.role === 'colaborador') setPage('entregas'); }} />
       <ToastContainer toasts={toasts} />
+    </>
+  );
+
+  if (currentUser.trocar_senha === 1) return (
+    <>
+      <style>{css}</style>
+      <TrocarSenhaPage onSuccess={() => setCurrentUser(u => u ? { ...u, trocar_senha: 0 } : u)} />
     </>
   );
 
