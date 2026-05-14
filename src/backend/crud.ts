@@ -238,6 +238,19 @@ export function atualizarFuncionario(id: number, dados: Partial<Funcionario>): P
     });
 }
 
+export function temEntregasPendentes(funcionario_id: number): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+        db.get(
+            `SELECT COUNT(*) as total FROM entregas WHERE funcionario_id = ? AND status = 'pendente_assinatura'`,
+            [funcionario_id],
+            (err, row: any) => {
+                if (err) reject(err);
+                else resolve((row?.total ?? 0) > 0);
+            }
+        );
+    });
+}
+
 // DELETE Funcionario
 export function deletarFuncionario(id: number): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -280,10 +293,10 @@ export function criarEpi(epi: Epi): Promise<number> {
 }
 
 // READ EPIs
-export function listarEpis(): Promise<Epi[]> {
+export function listarEpis(limit = 200, offset = 0): Promise<Epi[]> {
     return new Promise((resolve, reject) => {
-        const sql = `SELECT * FROM epis ORDER BY id DESC`;
-        db.all(sql, [], (err, rows: any[]) => {
+        const sql = `SELECT * FROM epis ORDER BY id DESC LIMIT ? OFFSET ?`;
+        db.all(sql, [limit, offset], (err, rows: any[]) => {
             if (err) return reject(err);
             resolve(rows);
         });
@@ -499,12 +512,17 @@ export function registrarAuditoria(
     detalhe: string | null,
     usuario_id: number | null,
     usuario: string,
-): void {
-    db.run(
-        `INSERT INTO audit_log (acao, entidade, entidade_id, detalhe, usuario_id, usuario) VALUES (?, ?, ?, ?, ?, ?)`,
-        [acao, entidade, entidade_id, detalhe, usuario_id, usuario],
-        (err) => { if (err) console.error('Erro ao registrar auditoria:', err.message); },
-    );
+): Promise<void> {
+    return new Promise((resolve) => {
+        db.run(
+            `INSERT INTO audit_log (acao, entidade, entidade_id, detalhe, usuario_id, usuario) VALUES (?, ?, ?, ?, ?, ?)`,
+            [acao, entidade, entidade_id, detalhe, usuario_id, usuario],
+            (err) => {
+                if (err) console.error('Erro ao registrar auditoria:', err.message);
+                resolve();
+            },
+        );
+    });
 }
 
 export function listarAuditLog({ acao = null, usuario = null, limit = 50, offset = 0 }: {

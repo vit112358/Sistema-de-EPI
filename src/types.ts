@@ -46,7 +46,7 @@ export interface EntregaItem {
 }
 
 export type EntregaStatus   = "pendente_assinatura" | "assinado" | "cancelado";
-export type TipoAssinatura  = "facial" | "digital" | "manual";
+export type TipoAssinatura  = "facial" | "facial_override" | "digital" | "manual";
 
 export interface Entrega {
   id?: number;

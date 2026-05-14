@@ -352,14 +352,14 @@ export function EntregasPage({ entregas, setEntregas, epis, funcionarios, curren
       if (entrega.tipo_assinatura === "manual") {
         doc.addImage(entrega.assinatura_img, "PNG", sigLineX, y, sigLineW, 20);
         y += 22;
-      } else if (entrega.tipo_assinatura === "facial") {
+      } else if (entrega.tipo_assinatura === "facial" || entrega.tipo_assinatura === "facial_override") {
         const photoSz = 22;
         const textX = sigLineX + photoSz + 3;
         doc.addImage(entrega.assinatura_img, isJpeg ? "JPEG" : "PNG", sigLineX, y, photoSz, photoSz);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
         doc.setTextColor(130, 130, 130);
-        doc.text("Assinado biometricamente por", textX, y + 8);
+        doc.text(entrega.tipo_assinatura === "facial_override" ? "Override admin — verificado visualmente" : "Assinado biometricamente por", textX, y + 8);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(10);
         doc.setTextColor(0, 0, 0);
@@ -373,7 +373,8 @@ export function EntregasPage({ entregas, setEntregas, epis, funcionarios, curren
     doc.line(sigLineX, y, sigLineX + sigLineW, y);
     y += 5;
     doc.setFontSize(9);
-    if (entrega.tipo_assinatura !== "facial" || !entrega.assinatura_img) {
+    const isFacialType = entrega.tipo_assinatura === "facial" || entrega.tipo_assinatura === "facial_override";
+    if (!isFacialType || !entrega.assinatura_img) {
       doc.text(nomeFuncionario, pageW / 2, y, { align: "center" });
       y += 4;
     }
@@ -509,10 +510,11 @@ export function EntregasPage({ entregas, setEntregas, epis, funcionarios, curren
                     {e.status === "cancelado"           && <span className="badge badge-gray">✕ Cancelado</span>}
                   </td>
                   <td>
-                    {e.tipo_assinatura === "facial"  && <span className="badge badge-blue">👤{e.confianca != null ? ` ${e.confianca}%` : ""}</span>}
-                    {e.tipo_assinatura === "digital" && <span className="badge badge-blue">👆 Digital</span>}
-                    {e.tipo_assinatura === "manual"  && <span className="badge badge-gray">✍️ Manual</span>}
-                    {!e.tipo_assinatura              && <span style={{ color: "var(--text3)", fontSize: 12 }}>—</span>}
+                    {e.tipo_assinatura === "facial"          && <span className="badge badge-blue">👤{e.confianca != null ? ` ${e.confianca}%` : ""}</span>}
+                    {e.tipo_assinatura === "facial_override" && <span className="badge badge-yellow">⚠️ Override{e.confianca != null ? ` ${e.confianca}%` : ""}</span>}
+                    {e.tipo_assinatura === "digital"         && <span className="badge badge-blue">👆 Digital</span>}
+                    {e.tipo_assinatura === "manual"          && <span className="badge badge-gray">✍️ Manual</span>}
+                    {!e.tipo_assinatura                      && <span style={{ color: "var(--text3)", fontSize: 12 }}>—</span>}
                   </td>
                   <td>
                     <div className="action-btns">

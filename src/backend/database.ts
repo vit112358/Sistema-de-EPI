@@ -203,6 +203,10 @@ export function inicializarBancoDeDados() {
                     if (!names.includes('telefone'))
                         db.run(`ALTER TABLE funcionarios ADD COLUMN telefone TEXT NOT NULL DEFAULT ''`);
                 });
+                // migração: matrícula deve ser única por funcionário
+                db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_func_matricula ON funcionarios(matricula)`, (e) => {
+                    if (e) console.warn('Índice único de matrícula não criado (duplicatas existentes?):', e.message);
+                });
             }
         });
 

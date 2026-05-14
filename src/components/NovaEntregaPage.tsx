@@ -168,8 +168,9 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
         clearInterval(iv); setSigProgress(100);
         setTimeout(() => {
           const confianca = sigType === "facial" ? faceScore : null;
+          const tipoEfetivo: TipoAssinatura = (sigType === "facial" && faceOverride) ? "facial_override" : sigType as TipoAssinatura;
           const itens: EntregaItem[] = selEpis.map(e => ({ epi_id: e.id!, nome: e.nome, img: e.img ?? "", ca: e.ca, qtd: qtds[e.itemKey] || 1 }));
-          setEntregas(prev => [{ id: newId, funcionario_id: func!.id!, funcionario: func!.nome, data: new Date().toISOString().split("T")[0], itens, status: "assinado", tipo_assinatura: sigType as TipoAssinatura | null, confianca, assinatura_img: sigImg }, ...prev]);
+          setEntregas(prev => [{ id: newId, funcionario_id: func!.id!, funcionario: func!.nome, data: new Date().toISOString().split("T")[0], itens, status: "assinado", tipo_assinatura: tipoEfetivo, confianca, assinatura_img: sigImg }, ...prev]);
           setSigning(false); setDone(true); setStep(4);
           toast("Entrega registrada e assinada!", "success");
         }, 500);

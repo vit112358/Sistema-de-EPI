@@ -3,7 +3,9 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, buscarImagemBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha, bloqueadoPorRateLimit, registrarFalhaLogin, limparTentativasLogin, registrarAuditoria, listarAuditLog, contarAuditLog} from './crud.ts';
+import cookieParser from 'cookie-parser';
+import { randomUUID } from 'crypto';
+import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, temEntregasPendentes, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, buscarImagemBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha, registrarAuditoria, listarAuditLog, contarAuditLog} from './crud.ts';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -14,6 +16,9 @@ if (!process.env.JWT_SECRET) {
     process.exit(1);
 }
 const JWT_SECRET: string = process.env.JWT_SECRET;
+
+// tokens revogados em memória (válido até o processo reiniciar; expira em 8h de qualquer forma)
+const revokedJtis = new Set<string>();
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Backend rodando em http://localhost:${PORT} (e acessível na rede local)`);
@@ -26,8 +31,10 @@ app.use(cors({
         'https://segurid.com.br',
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    credentials: true,
 }));
 app.use(express.json({ limit: '2mb' }));
+app.use(cookieParser());
 
 // ─── Login (rota pública) ─────────────────────────────────────────────────────
 
@@ -40,20 +47,15 @@ const loginLimiter = rateLimit({
 });
 
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
-    const ip = req.ip ?? 'unknown';
     try {
         const { username, senha } = req.body as { username?: string; senha?: string };
         if (!username || !senha) return res.status(400).json({ error: 'Credenciais inválidas' });
-
-        if (await bloqueadoPorRateLimit(ip))
-            return res.status(429).json({ error: 'Muitas tentativas. Tente novamente em 15 minutos.' });
 
         const users = await listarUsuarios();
         const user = users.find(u => u.username === username);
 
         if (!user) {
             await bcrypt.compare('dummy', '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ012');
-            await registrarFalhaLogin(ip);
             return res.status(401).json({ error: 'Credenciais inválidas' });
         }
 
@@ -68,34 +70,57 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
             }
         }
 
-        if (!valido) {
-            await registrarFalhaLogin(ip);
-            return res.status(401).json({ error: 'Credenciais inválidas' });
-        }
+        if (!valido) return res.status(401).json({ error: 'Credenciais inválidas' });
 
-        await limparTentativasLogin(ip);
         const { senha: _s, ...userSemSenha } = user;
+        const jti = randomUUID();
         const token = jwt.sign(
-            { id: userSemSenha.id, username: userSemSenha.username, role: userSemSenha.role },
+            { id: userSemSenha.id, username: userSemSenha.username, role: userSemSenha.role, jti },
             JWT_SECRET,
             { expiresIn: '8h' }
         );
-        res.json({ ...userSemSenha, token });
+        res.cookie('epi_session', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 8 * 60 * 60 * 1000,
+            path: '/',
+        });
+        res.json(userSemSenha);
     } catch {
         res.status(500).json({ error: 'Erro interno' });
     }
 });
 
+// ─── Logout (rota pública — apenas limpa o cookie e revoga o jti) ────────────
+
+app.post('/api/auth/logout', (req, res) => {
+    const token = req.cookies?.epi_session;
+    if (token) {
+        try {
+            const payload = jwt.verify(token, JWT_SECRET) as any;
+            if (payload?.jti) revokedJtis.add(payload.jti);
+        } catch { /* token já inválido, segue para limpar o cookie */ }
+    }
+    res.clearCookie('epi_session', { path: '/' });
+    res.json({ success: true });
+});
+
 // ─── Middleware JWT (todas as rotas abaixo exigem token válido) ───────────────
 
 const autenticar = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const header = req.headers.authorization;
-    if (!header?.startsWith('Bearer ')) {
+    const token = req.cookies?.epi_session;
+    if (!token) {
         res.status(401).json({ error: 'Não autorizado' });
         return;
     }
     try {
-        (req as any).usuario = jwt.verify(header.slice(7), JWT_SECRET);
+        const payload = jwt.verify(token, JWT_SECRET) as any;
+        if (payload?.jti && revokedJtis.has(payload.jti)) {
+            res.status(401).json({ error: 'Sessão encerrada' });
+            return;
+        }
+        (req as any).usuario = payload;
         next();
     } catch {
         res.status(401).json({ error: 'Token inválido ou expirado' });
@@ -214,7 +239,7 @@ app.post('/api/entregas', soOperadorOuAdmin, async (req, res) => {
         const novaEntrega = req.body;
         const id = await criarEntrega(novaEntrega);
         const a = actor(req);
-        registrarAuditoria('entrega_criada', 'entrega', id,
+        await registrarAuditoria('entrega_criada', 'entrega', id,
             `Para: ${novaEntrega.funcionario} · ${novaEntrega.itens.length} item(ns)`,
             a.id, a.username);
         res.status(201).json({ id, ...novaEntrega });
@@ -224,7 +249,7 @@ app.post('/api/entregas', soOperadorOuAdmin, async (req, res) => {
     }
 });
 
-app.put('/api/entregas/:id', async (req, res) => {
+app.put('/api/entregas/:id', soOperadorOuAdmin, async (req, res) => {
     const err = validarEntregaPut(req.body);
     if (err) return res.status(400).json({ error: err });
     const id = parseId(req.params.id);
@@ -238,10 +263,10 @@ app.put('/api/entregas/:id', async (req, res) => {
         await atualizarStatusEntrega(id, req.body);
         const a = actor(req);
         if (req.body.status === 'assinado')
-            registrarAuditoria('entrega_assinada', 'entrega', id,
+            await registrarAuditoria('entrega_assinada', 'entrega', id,
                 `Tipo: ${req.body.tipo_assinatura ?? '—'}`, a.id, a.username);
         else if (req.body.status === 'cancelado')
-            registrarAuditoria('entrega_cancelada', 'entrega', id, null, a.id, a.username);
+            await registrarAuditoria('entrega_cancelada', 'entrega', id, null, a.id, a.username);
         res.json({ success: true });
     } catch (error) {
         console.error('Erro ao atualizar entrega:', error);
@@ -270,7 +295,7 @@ app.post('/api/funcionarios', soOperadorOuAdmin, async (req, res) => {
         const novoFuncionario = req.body;
         const id = await criarFuncionario(novoFuncionario);
         const a = actor(req);
-        registrarAuditoria('funcionario_criado', 'funcionario', id,
+        await registrarAuditoria('funcionario_criado', 'funcionario', id,
             novoFuncionario.nome, a.id, a.username);
         res.status(201).json({ id, ...novoFuncionario, biometrias: [] });
     } catch (error: any) {
@@ -294,7 +319,7 @@ app.put('/api/funcionarios/:id', soOperadorOuAdmin, async (req, res) => {
     try {
         await atualizarFuncionario(id, req.body);
         const a = actor(req);
-        registrarAuditoria('funcionario_atualizado', 'funcionario', id,
+        await registrarAuditoria('funcionario_atualizado', 'funcionario', id,
             req.body.nome ?? null, a.id, a.username);
         res.json({ success: true });
     } catch (error) {
@@ -307,9 +332,11 @@ app.delete('/api/funcionarios/:id', soOperadorOuAdmin, async (req, res) => {
     const id = parseId(req.params.id);
     if (id === null) return res.status(400).json({ error: 'ID inválido' });
     try {
+        if (await temEntregasPendentes(id))
+            return res.status(409).json({ error: 'Funcionário possui entregas pendentes de assinatura. Assine ou cancele antes de excluir.' });
         await deletarFuncionario(id);
         const a = actor(req);
-        registrarAuditoria('funcionario_deletado', 'funcionario', id, null, a.id, a.username);
+        await registrarAuditoria('funcionario_deletado', 'funcionario', id, null, a.id, a.username);
         res.json({ success: true });
     } catch (error) {
         console.error('Erro ao deletar funcionário:', error);
@@ -319,9 +346,11 @@ app.delete('/api/funcionarios/:id', soOperadorOuAdmin, async (req, res) => {
 
 // ─── EPIs ─────────────────────────────────────────────────────────────────────
 
-app.get('/api/epis', async (_req, res) => {
+app.get('/api/epis', async (req, res) => {
+    const limit  = Math.min(Math.max(1, parseInt(req.query.limit  as string) || 200), 500);
+    const offset = Math.max(0, parseInt(req.query.offset as string) || 0);
     try {
-        const epis = await listarEpis();
+        const epis = await listarEpis(limit, offset);
         res.json(epis);
     } catch (error) {
         console.error('Erro ao buscar EPIs:', error);
@@ -335,7 +364,7 @@ app.post('/api/epis', soOperadorOuAdmin, async (req, res) => {
     try {
         const id = await criarEpi(req.body);
         const a = actor(req);
-        registrarAuditoria('epi_criado', 'epi', id, req.body.nome, a.id, a.username);
+        await registrarAuditoria('epi_criado', 'epi', id, req.body.nome, a.id, a.username);
         res.status(201).json({ id, ...req.body });
     } catch (error) {
         console.error('Erro ao criar EPI:', error);
@@ -351,7 +380,7 @@ app.put('/api/epis/:id', soOperadorOuAdmin, async (req, res) => {
     try {
         await atualizarEpi(id, req.body);
         const a = actor(req);
-        registrarAuditoria('epi_atualizado', 'epi', id, req.body.nome ?? null, a.id, a.username);
+        await registrarAuditoria('epi_atualizado', 'epi', id, req.body.nome ?? null, a.id, a.username);
         res.json({ success: true });
     } catch (error) {
         console.error('Erro ao atualizar EPI:', error);
@@ -365,7 +394,7 @@ app.delete('/api/epis/:id', soOperadorOuAdmin, async (req, res) => {
     try {
         await deletarEpi(id);
         const a = actor(req);
-        registrarAuditoria('epi_deletado', 'epi', id, null, a.id, a.username);
+        await registrarAuditoria('epi_deletado', 'epi', id, null, a.id, a.username);
         res.json({ success: true });
     } catch (error) {
         console.error('Erro ao deletar EPI:', error);
@@ -463,7 +492,7 @@ app.post('/api/users', soAdmin, async (req, res) => {
         const id = await criarUsuario(req.body);
         const { senha: _s, ...semSenha } = req.body;
         const a = actor(req);
-        registrarAuditoria('usuario_criado', 'usuario', id,
+        await registrarAuditoria('usuario_criado', 'usuario', id,
             `${req.body.username} (${req.body.role})`, a.id, a.username);
         res.status(201).json({ id, ...semSenha });
     } catch { res.status(500).json({ error: 'Erro ao criar usuário' }); }
@@ -477,7 +506,7 @@ app.put('/api/users/:id', soAdmin, async (req, res) => {
     try {
         await atualizarUsuario(id, req.body);
         const a = actor(req);
-        registrarAuditoria('usuario_atualizado', 'usuario', id,
+        await registrarAuditoria('usuario_atualizado', 'usuario', id,
             req.body.username ?? null, a.id, a.username);
         res.json({ success: true });
     } catch { res.status(500).json({ error: 'Erro ao atualizar usuário' }); }
@@ -496,7 +525,7 @@ app.delete('/api/users/:id', soAdmin, async (req, res) => {
             return res.status(400).json({ error: 'Não é possível excluir o único administrador' });
         await deletarUsuario(id);
         const a = actor(req);
-        registrarAuditoria('usuario_deletado', 'usuario', id, null, a.id, a.username);
+        await registrarAuditoria('usuario_deletado', 'usuario', id, null, a.id, a.username);
         res.json({ success: true });
     } catch { res.status(500).json({ error: 'Erro ao deletar usuário' }); }
 });

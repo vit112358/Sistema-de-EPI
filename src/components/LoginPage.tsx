@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { Usuario } from "../types";
-import { setToken } from "../api";
 
 interface Props {
   onLogin: (u: Usuario) => void;
@@ -21,11 +20,11 @@ export function LoginPage({ onLogin }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, senha: pass }),
+        credentials: 'include',
       });
       if (res.ok) {
-        const { token, ...user }: Usuario & { token: string } = await res.json();
-        setToken(token);
-        onLogin(user as Usuario);
+        const user: Usuario = await res.json();
+        onLogin(user);
       } else {
         setErr("Credenciais inválidas");
       }

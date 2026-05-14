@@ -155,9 +155,10 @@ export function EpisPorFuncionarioPage({ entregas, funcionarios }: Props) {
         rows.push({
           epi:   item.nome,
           data:  fmtDate(e.data),
-          tipo:  e.tipo_assinatura === "facial"  ? "Facial"
-               : e.tipo_assinatura === "digital" ? "Digital"
-               : e.tipo_assinatura === "manual"  ? "Manual"
+          tipo:  e.tipo_assinatura === "facial"          ? "Facial"
+               : e.tipo_assinatura === "facial_override" ? "Override Admin"
+               : e.tipo_assinatura === "digital"         ? "Digital"
+               : e.tipo_assinatura === "manual"          ? "Manual"
                : "—",
           sigId,
         });

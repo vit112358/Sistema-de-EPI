@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { apiFetch, setToken, onUnauthorized } from "./api";
+import { apiFetch, logout, onUnauthorized } from "./api";
 import Landing from "./Landing";
 import { css } from "./styles";
 import { useToast } from "./hooks/useToast";
@@ -87,7 +87,6 @@ export default function App() {
 
   useEffect(() => {
     onUnauthorized(() => {
-      setToken(null);
       setCurrentUser(null);
       setShowLanding(true);
     });
@@ -122,7 +121,7 @@ export default function App() {
     const next = typeof acao === 'function' ? acao(prev) : acao;
 
     if (next.length > prev.length) {
-      const nova = next[0];
+      const nova = next.find(n => !prev.some(a => a.id === n.id));
       if (nova?.funcionario && nova.id && !entregasEnviadasRef.current.has(nova.id)) {
         entregasEnviadasRef.current.add(nova.id);
         const tempId = nova.id;
@@ -343,7 +342,7 @@ export default function App() {
                   ⚠️ {stockAlerts + pendentes} alerta{(stockAlerts + pendentes) !== 1 ? "s" : ""}
                 </div>
               )}
-              <button className="btn btn-danger btn-sm" onClick={() => { setToken(null); setCurrentUser(null); setShowLanding(true); }}>Sair</button>
+              <button className="btn btn-danger btn-sm" onClick={() => { logout(); setCurrentUser(null); setShowLanding(true); }}>Sair</button>
             </div>
           </div>
           <div className="content">
