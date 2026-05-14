@@ -576,10 +576,5 @@ Diferença entre os três tipos
 ![img_1.png](img_1.png)
 
 Checar
-
-
-Sem backup — ainda real. VPS cai, dados somem.
 Senha admin123 hardcoded no seed — todo cliente novo sobe com ela. Precisa forçar troca no primeiro login ou pelo menos avisar em tela.
-GET /api/users sem soAdmin — qualquer operador vê lista de usuários.
-Sem validação de input nos endpoints POST/PUT.
-Sem log de auditoria — quem assinou, quem cancelou, quando. Para EPI isso é crítico em fiscalização trabalhista.
+

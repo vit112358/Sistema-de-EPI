@@ -77,7 +77,7 @@ export function criarEntrega(entrega: Entrega): Promise<number> {
 }
 
 // READ (Listar todas com seus itens — JOIN via subquery correlacionada)
-export function listarEntregas(): Promise<Entrega[]> {
+export function listarEntregas(limit = 500, offset = 0): Promise<Entrega[]> {
     return new Promise((resolve, reject) => {
         const sql = `
             SELECT e.*,
@@ -90,9 +90,9 @@ export function listarEntregas(): Promise<Entrega[]> {
                     'qtd',        ei.qtd,
                     'ca',         ei.ca
                 )) FROM entrega_itens ei WHERE ei.entrega_id = e.id) AS itens_json
-            FROM entregas e ORDER BY e.id DESC
+            FROM entregas e ORDER BY e.id DESC LIMIT ? OFFSET ?
         `;
-        db.all(sql, [], (err, rows: any[]) => {
+        db.all(sql, [limit, offset], (err, rows: any[]) => {
             if (err) return reject(err);
             resolve(rows.map(({ itens_json, ...rest }) => ({
                 ...rest,
@@ -194,7 +194,7 @@ export function criarFuncionario(funcionario: Funcionario): Promise<number> {
 }
 
 // READ Funcionarios — sem imagem_base64 (dado pesado); JOIN via subquery correlacionada
-export function listarFuncionarios(): Promise<Funcionario[]> {
+export function listarFuncionarios(limit = 500, offset = 0): Promise<Funcionario[]> {
     return new Promise((resolve, reject) => {
         const sql = `
             SELECT f.*,
@@ -206,9 +206,9 @@ export function listarFuncionarios(): Promise<Funcionario[]> {
                     'qualidade',      b.qualidade,
                     'descriptor_json',b.descriptor_json
                 )) FROM biometrias b WHERE b.funcionario_id = f.id) AS biometrias_json
-            FROM funcionarios f ORDER BY f.id DESC
+            FROM funcionarios f ORDER BY f.id DESC LIMIT ? OFFSET ?
         `;
-        db.all(sql, [], (err, rows: any[]) => {
+        db.all(sql, [limit, offset], (err, rows: any[]) => {
             if (err) return reject(err);
             resolve(rows.map(({ biometrias_json, ...f }) => ({
                 ...f,
@@ -507,12 +507,30 @@ export function registrarAuditoria(
     );
 }
 
-export function listarAuditLog(limit = 1000): Promise<any[]> {
+export function listarAuditLog({ acao = null, usuario = null, limit = 50, offset = 0 }: {
+    acao?: string | null;
+    usuario?: string | null;
+    limit?: number;
+    offset?: number;
+} = {}): Promise<any[]> {
     return new Promise((resolve, reject) => {
         db.all(
-            `SELECT * FROM audit_log ORDER BY id DESC LIMIT ?`,
-            [limit],
+            `SELECT * FROM audit_log WHERE (? IS NULL OR acao = ?) AND (? IS NULL OR usuario = ?) ORDER BY id DESC LIMIT ? OFFSET ?`,
+            [acao, acao, usuario, usuario, limit, offset],
             (err, rows: any[]) => { if (err) reject(err); else resolve(rows); },
+        );
+    });
+}
+
+export function contarAuditLog({ acao = null, usuario = null }: {
+    acao?: string | null;
+    usuario?: string | null;
+} = {}): Promise<number> {
+    return new Promise((resolve, reject) => {
+        db.get(
+            `SELECT COUNT(*) as total FROM audit_log WHERE (? IS NULL OR acao = ?) AND (? IS NULL OR usuario = ?)`,
+            [acao, acao, usuario, usuario],
+            (err, row: any) => { if (err) reject(err); else resolve(row?.total ?? 0); },
         );
     });
 }

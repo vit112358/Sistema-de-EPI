@@ -3,7 +3,7 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, buscarImagemBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha, bloqueadoPorRateLimit, registrarFalhaLogin, limparTentativasLogin, registrarAuditoria, listarAuditLog} from './crud.ts';
+import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, buscarImagemBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha, bloqueadoPorRateLimit, registrarFalhaLogin, limparTentativasLogin, registrarAuditoria, listarAuditLog, contarAuditLog} from './crud.ts';
 
 const app = express();
 const PORT = 3000;
@@ -23,8 +23,6 @@ app.use(cors({
         'http://localhost:5173',
         'http://127.0.0.1:5173',
         'https://segurid.com.br',
-        'http://segurid.com.br',
-        'http://163.176.188.254',
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
 }));
@@ -33,7 +31,7 @@ app.use(express.json({ limit: '2mb' }));
 // ─── Login (rota pública) ─────────────────────────────────────────────────────
 
 const loginLimiter = rateLimit({
-    windowMs: 3 * 60 * 1000,
+    windowMs: 15 * 60 * 1000,
     limit: 5,
     message: { error: 'Muitas tentativas. Tente novamente em 15 minutos.' },
     standardHeaders: true,
@@ -105,7 +103,7 @@ const autenticar = (req: express.Request, res: express.Response, next: express.N
 
 app.use(autenticar);
 
-// ─── Autorização admin ────────────────────────────────────────────────────────
+// ─── Autorização ──────────────────────────────────────────────────────────────
 
 const soAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
     if ((req as any).usuario?.role !== 'admin') {
@@ -115,10 +113,26 @@ const soAdmin = (req: express.Request, res: express.Response, next: express.Next
     next();
 };
 
-// ─── Helpers de validação ────────────────────────────────────────────────────
+const soOperadorOuAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const role = (req as any).usuario?.role;
+    if (role !== 'admin' && role !== 'operador') {
+        res.status(403).json({ error: 'Acesso restrito a operadores e administradores' });
+        return;
+    }
+    next();
+};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function parseId(param: string | string[]): number | null {
+    const s = Array.isArray(param) ? param[0] : param;
+    const n = parseInt(s, 10);
+    return isNaN(n) || n <= 0 ? null : n;
+}
 
 const ROLES_VALIDOS = ['admin', 'operador', 'colaborador'];
 const STATUS_VALIDOS = ['pendente_assinatura', 'assinado', 'cancelado'];
+const TIPOS_BIOMETRIA = ['facial', 'digital', 'manual'];
 
 function validarEntregaPost(b: any): string | null {
     if (!Number.isInteger(b.funcionario_id)) return 'funcionario_id deve ser um inteiro';
@@ -151,6 +165,13 @@ function validarEpi(b: any): string | null {
     return null;
 }
 
+function validarBiometria(b: any): string | null {
+    if (!Number.isInteger(b.funcionario_id) || b.funcionario_id <= 0) return 'funcionario_id deve ser um inteiro positivo';
+    if (!TIPOS_BIOMETRIA.includes(b.tipo)) return `tipo inválido; valores aceitos: ${TIPOS_BIOMETRIA.join(', ')}`;
+    if (!b.data?.trim()) return 'data é obrigatória';
+    return null;
+}
+
 function validarUsuarioPost(b: any): string | null {
     if (!b.nome?.trim()) return 'nome é obrigatório';
     if (!b.username?.trim()) return 'username é obrigatório';
@@ -173,9 +194,11 @@ function actor(req: express.Request): { id: number; username: string } {
 
 // ─── Entregas ─────────────────────────────────────────────────────────────────
 
-app.get('/api/entregas', async (_req, res) => {
+app.get('/api/entregas', async (req, res) => {
+    const limit  = Math.min(Math.max(1, parseInt(req.query.limit  as string) || 500), 1000);
+    const offset = Math.max(0, parseInt(req.query.offset as string) || 0);
     try {
-        const entregas = await listarEntregas();
+        const entregas = await listarEntregas(limit, offset);
         res.json(entregas);
     } catch (error) {
         console.error('Erro ao buscar entregas:', error);
@@ -183,7 +206,7 @@ app.get('/api/entregas', async (_req, res) => {
     }
 });
 
-app.post('/api/entregas', async (req, res) => {
+app.post('/api/entregas', soOperadorOuAdmin, async (req, res) => {
     const err = validarEntregaPost(req.body);
     if (err) return res.status(400).json({ error: err });
     try {
@@ -203,8 +226,14 @@ app.post('/api/entregas', async (req, res) => {
 app.put('/api/entregas/:id', async (req, res) => {
     const err = validarEntregaPut(req.body);
     if (err) return res.status(400).json({ error: err });
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'ID inválido' });
+    if (req.body.status === 'cancelado') {
+        const role = (req as any).usuario?.role;
+        if (role !== 'admin' && role !== 'operador')
+            return res.status(403).json({ error: 'Cancelamento restrito a operadores e administradores' });
+    }
     try {
-        const id = parseInt(req.params.id);
         await atualizarStatusEntrega(id, req.body);
         const a = actor(req);
         if (req.body.status === 'assinado')
@@ -221,9 +250,11 @@ app.put('/api/entregas/:id', async (req, res) => {
 
 // ─── Funcionários ─────────────────────────────────────────────────────────────
 
-app.get('/api/funcionarios', async (_req, res) => {
+app.get('/api/funcionarios', async (req, res) => {
+    const limit  = Math.min(Math.max(1, parseInt(req.query.limit  as string) || 500), 1000);
+    const offset = Math.max(0, parseInt(req.query.offset as string) || 0);
     try {
-        const funcionarios = await listarFuncionarios();
+        const funcionarios = await listarFuncionarios(limit, offset);
         res.json(funcionarios);
     } catch (error) {
         console.error('Erro ao buscar funcionários:', error);
@@ -231,7 +262,7 @@ app.get('/api/funcionarios', async (_req, res) => {
     }
 });
 
-app.post('/api/funcionarios', async (req, res) => {
+app.post('/api/funcionarios', soOperadorOuAdmin, async (req, res) => {
     const err = validarFuncionario(req.body);
     if (err) return res.status(400).json({ error: err });
     try {
@@ -254,11 +285,12 @@ app.post('/api/funcionarios', async (req, res) => {
     }
 });
 
-app.put('/api/funcionarios/:id', async (req, res) => {
+app.put('/api/funcionarios/:id', soOperadorOuAdmin, async (req, res) => {
     const err = validarFuncionario(req.body);
     if (err) return res.status(400).json({ error: err });
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'ID inválido' });
     try {
-        const id = parseInt(req.params.id);
         await atualizarFuncionario(id, req.body);
         const a = actor(req);
         registrarAuditoria('funcionario_atualizado', 'funcionario', id,
@@ -270,9 +302,10 @@ app.put('/api/funcionarios/:id', async (req, res) => {
     }
 });
 
-app.delete('/api/funcionarios/:id', async (req, res) => {
+app.delete('/api/funcionarios/:id', soOperadorOuAdmin, async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'ID inválido' });
     try {
-        const id = parseInt(req.params.id);
         await deletarFuncionario(id);
         const a = actor(req);
         registrarAuditoria('funcionario_deletado', 'funcionario', id, null, a.id, a.username);
@@ -295,7 +328,7 @@ app.get('/api/epis', async (_req, res) => {
     }
 });
 
-app.post('/api/epis', async (req, res) => {
+app.post('/api/epis', soOperadorOuAdmin, async (req, res) => {
     const err = validarEpi(req.body);
     if (err) return res.status(400).json({ error: err });
     try {
@@ -309,11 +342,12 @@ app.post('/api/epis', async (req, res) => {
     }
 });
 
-app.put('/api/epis/:id', async (req, res) => {
+app.put('/api/epis/:id', soOperadorOuAdmin, async (req, res) => {
     const err = validarEpi(req.body);
     if (err) return res.status(400).json({ error: err });
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'ID inválido' });
     try {
-        const id = parseInt(req.params.id);
         await atualizarEpi(id, req.body);
         const a = actor(req);
         registrarAuditoria('epi_atualizado', 'epi', id, req.body.nome ?? null, a.id, a.username);
@@ -324,9 +358,10 @@ app.put('/api/epis/:id', async (req, res) => {
     }
 });
 
-app.delete('/api/epis/:id', async (req, res) => {
+app.delete('/api/epis/:id', soOperadorOuAdmin, async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'ID inválido' });
     try {
-        const id = parseInt(req.params.id);
         await deletarEpi(id);
         const a = actor(req);
         registrarAuditoria('epi_deletado', 'epi', id, null, a.id, a.username);
@@ -341,24 +376,32 @@ app.delete('/api/epis/:id', async (req, res) => {
 
 app.get('/api/cargos', async (_req, res) => {
     try { res.json(await listarCargos()); }
-    catch (error) { res.status(500).json({ error: 'Erro ao buscar cargos' }); }
+    catch { res.status(500).json({ error: 'Erro ao buscar cargos' }); }
 });
-app.post('/api/cargos', async (req, res) => {
+app.post('/api/cargos', soOperadorOuAdmin, async (req, res) => {
+    if (!req.body.nome?.trim()) return res.status(400).json({ error: 'nome é obrigatório' });
     try { const id = await criarCargo(req.body.nome); res.status(201).json({ id, nome: req.body.nome }); }
-    catch (error) { res.status(500).json({ error: 'Erro ao criar cargo' }); }
+    catch { res.status(500).json({ error: 'Erro ao criar cargo' }); }
 });
-app.put('/api/cargos/:id', async (req, res) => {
-    try { await atualizarCargo(parseInt(req.params.id), req.body.nome); res.json({ success: true }); }
-    catch (error) { res.status(500).json({ error: 'Erro ao atualizar cargo' }); }
+app.put('/api/cargos/:id', soOperadorOuAdmin, async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'ID inválido' });
+    if (!req.body.nome?.trim()) return res.status(400).json({ error: 'nome é obrigatório' });
+    try { await atualizarCargo(id, req.body.nome); res.json({ success: true }); }
+    catch { res.status(500).json({ error: 'Erro ao atualizar cargo' }); }
 });
-app.delete('/api/cargos/:id', async (req, res) => {
-    try { await deletarCargo(parseInt(req.params.id)); res.json({ success: true }); }
-    catch (error) { res.status(500).json({ error: 'Erro ao deletar cargo' }); }
+app.delete('/api/cargos/:id', soOperadorOuAdmin, async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'ID inválido' });
+    try { await deletarCargo(id); res.json({ success: true }); }
+    catch { res.status(500).json({ error: 'Erro ao deletar cargo' }); }
 });
 
 // ─── Biometrias ───────────────────────────────────────────────────────────────
 
-app.post('/api/biometrias', async (req, res) => {
+app.post('/api/biometrias', soOperadorOuAdmin, async (req, res) => {
+    const err = validarBiometria(req.body);
+    if (err) return res.status(400).json({ error: err });
     try {
         const id = await salvarBiometria(req.body);
         res.status(201).json({ id, ...req.body });
@@ -369,17 +412,20 @@ app.post('/api/biometrias', async (req, res) => {
 });
 
 app.get('/api/biometrias/:id/imagem', async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'ID inválido' });
     try {
-        const imagem = await buscarImagemBiometria(parseInt(req.params.id));
+        const imagem = await buscarImagemBiometria(id);
         res.json({ imagem_base64: imagem });
     } catch {
         res.status(500).json({ error: 'Erro ao buscar imagem' });
     }
 });
 
-app.patch('/api/biometrias/:id/descriptor', async (req, res) => {
+app.patch('/api/biometrias/:id/descriptor', soOperadorOuAdmin, async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'ID inválido' });
     try {
-        const id = parseInt(req.params.id);
         await atualizarDescriptorBiometria(id, req.body.descriptor_json);
         res.json({ success: true });
     } catch (error) {
@@ -388,9 +434,10 @@ app.patch('/api/biometrias/:id/descriptor', async (req, res) => {
     }
 });
 
-app.delete('/api/biometrias/:id', async (req, res) => {
+app.delete('/api/biometrias/:id', soOperadorOuAdmin, async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'ID inválido' });
     try {
-        const id = parseInt(req.params.id);
         await deletarBiometria(id);
         res.json({ success: true });
     } catch (error) {
@@ -424,8 +471,9 @@ app.post('/api/users', soAdmin, async (req, res) => {
 app.put('/api/users/:id', soAdmin, async (req, res) => {
     const err = validarUsuarioPut(req.body);
     if (err) return res.status(400).json({ error: err });
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'ID inválido' });
     try {
-        const id = Number.parseInt(req.params.id as string);
         await atualizarUsuario(id, req.body);
         const a = actor(req);
         registrarAuditoria('usuario_atualizado', 'usuario', id,
@@ -435,8 +483,16 @@ app.put('/api/users/:id', soAdmin, async (req, res) => {
 });
 
 app.delete('/api/users/:id', soAdmin, async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'ID inválido' });
+    const requester = (req as any).usuario;
+    if (requester.id === id)
+        return res.status(400).json({ error: 'Você não pode excluir sua própria conta' });
     try {
-        const id = Number.parseInt(req.params.id as string);
+        const users = await listarUsuarios();
+        const target = users.find(u => u.id === id);
+        if (target?.role === 'admin' && users.filter(u => u.role === 'admin').length <= 1)
+            return res.status(400).json({ error: 'Não é possível excluir o único administrador' });
         await deletarUsuario(id);
         const a = actor(req);
         registrarAuditoria('usuario_deletado', 'usuario', id, null, a.id, a.username);
@@ -446,7 +502,16 @@ app.delete('/api/users/:id', soAdmin, async (req, res) => {
 
 // ─── Auditoria ────────────────────────────────────────────────────────────────
 
-app.get('/api/audit-log', soAdmin, async (_req, res) => {
-    try { res.json(await listarAuditLog()); }
-    catch { res.status(500).json({ error: 'Erro ao buscar log de auditoria' }); }
+app.get('/api/audit-log', soAdmin, async (req, res) => {
+    const limit  = Math.min(Math.max(1, parseInt(req.query.limit  as string) || 50), 500);
+    const offset = Math.max(0, parseInt(req.query.offset as string) || 0);
+    const acao    = (req.query.acao    as string) || null;
+    const usuario = (req.query.usuario as string) || null;
+    try {
+        const [data, total] = await Promise.all([
+            listarAuditLog({ acao, usuario, limit, offset }),
+            contarAuditLog({ acao, usuario }),
+        ]);
+        res.json({ data, total });
+    } catch { res.status(500).json({ error: 'Erro ao buscar log de auditoria' }); }
 });
