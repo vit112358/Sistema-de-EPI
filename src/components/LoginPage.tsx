@@ -7,7 +7,7 @@ interface Props {
 }
 
 export function LoginPage({ onLogin }: Props) {
-  const [username, setUsername] = useState("admin");
+  const [username, setUsername] = useState("");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);

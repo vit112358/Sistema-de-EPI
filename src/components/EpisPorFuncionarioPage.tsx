@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { jsPDF } from "jspdf";
 import type { Entrega, Funcionario } from "../types";
-import { declaracaoTermoEpi } from "../helpers";
+import { declaracaoTermoEpi, COMPANY_CONFIG } from "../helpers";
 
 interface Props {
   entregas: Entrega[];
@@ -79,6 +79,24 @@ export function EpisPorFuncionarioPage({ entregas, funcionarios }: Props) {
     const cargoLine = doc.splitTextToSize(func.cargo, pageW - x3 - mg - 3)[0] ?? "";
     doc.text(cargoLine,      x3 + 2, y + 7.5);
     y += hdrH;
+
+    // ── Linha empresa ──────────────────────────────────────────────────────────
+    const empH = 9;
+    box(empH);
+    const xEmp = mg + cw * 0.45;
+    vline(xEmp, empH);
+
+    doc.setFontSize(6.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("EMPRESA:",   mg + 2,    y + 3.5);
+    doc.text("ENDEREÇO:", xEmp + 2,  y + 3.5);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(COMPANY_CONFIG.nome, mg + 2, y + 7.5);
+    const enderecoLine = doc.splitTextToSize(COMPANY_CONFIG.endereco, pageW - xEmp - mg - 3)[0] ?? "";
+    doc.text(enderecoLine, xEmp + 2, y + 7.5);
+    y += empH;
 
     // ── Subtítulo ──────────────────────────────────────────────────────────────
     box(7);

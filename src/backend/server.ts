@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit';
 import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, buscarImagemBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha, bloqueadoPorRateLimit, registrarFalhaLogin, limparTentativasLogin, registrarAuditoria, listarAuditLog, contarAuditLog} from './crud.ts';
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = 3000;
 
 if (!process.env.JWT_SECRET) {
@@ -39,7 +40,7 @@ const loginLimiter = rateLimit({
 });
 
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
-    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.ip ?? 'unknown';
+    const ip = req.ip ?? 'unknown';
     try {
         const { username, senha } = req.body as { username?: string; senha?: string };
         if (!username || !senha) return res.status(400).json({ error: 'Credenciais inválidas' });
@@ -228,10 +229,10 @@ app.put('/api/entregas/:id', async (req, res) => {
     if (err) return res.status(400).json({ error: err });
     const id = parseId(req.params.id);
     if (id === null) return res.status(400).json({ error: 'ID inválido' });
-    if (req.body.status === 'cancelado') {
-        const role = (req as any).usuario?.role;
+    const role = (req as any).usuario?.role;
+    if (req.body.status === 'cancelado' || req.body.status === 'assinado') {
         if (role !== 'admin' && role !== 'operador')
-            return res.status(403).json({ error: 'Cancelamento restrito a operadores e administradores' });
+            return res.status(403).json({ error: 'Ação restrita a operadores e administradores' });
     }
     try {
         await atualizarStatusEntrega(id, req.body);
@@ -411,7 +412,7 @@ app.post('/api/biometrias', soOperadorOuAdmin, async (req, res) => {
     }
 });
 
-app.get('/api/biometrias/:id/imagem', async (req, res) => {
+app.get('/api/biometrias/:id/imagem', soOperadorOuAdmin, async (req, res) => {
     const id = parseId(req.params.id);
     if (id === null) return res.status(400).json({ error: 'ID inválido' });
     try {
