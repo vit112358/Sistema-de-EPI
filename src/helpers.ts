@@ -1,6 +1,7 @@
 export const COMPANY_CONFIG = {
   nome: "Empresa Exemplo Ltda.",
   endereco: "Av. Paulista, 1000 – Bela Vista, São Paulo/SP – CEP 01310-100",
+  cnpj: "12.345.678/0001-90",
 };
 
 export function addDays(dateStr: string, days: number | undefined): Date {

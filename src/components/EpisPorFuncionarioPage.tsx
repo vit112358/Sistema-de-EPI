@@ -90,12 +90,14 @@ export function EpisPorFuncionarioPage({ entregas, funcionarios }: Props) {
     doc.setFont("helvetica", "bold");
     doc.text("EMPRESA:",   mg + 2,    y + 3.5);
     doc.text("ENDEREÇO:", xEmp + 2,  y + 3.5);
+    doc.text("CNPJ:", xEmp + 2,  y + 3.5);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.text(COMPANY_CONFIG.nome, mg + 2, y + 7.5);
     const enderecoLine = doc.splitTextToSize(COMPANY_CONFIG.endereco, pageW - xEmp - mg - 3)[0] ?? "";
     doc.text(enderecoLine, xEmp + 2, y + 7.5);
+    doc.text(COMPANY_CONFIG.cnpj, xEmp + 2, y + 7.5);
     y += empH;
 
     // ── Subtítulo ──────────────────────────────────────────────────────────────
