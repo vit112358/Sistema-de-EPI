@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Shield body -->
+  <path d="M16 1 L30 6.5 L30 18.5 C30 26 23.5 31 16 33 C8.5 31 2 26 2 18.5 L2 6.5 Z" fill="#1a1a2e"/>
+  <!-- Shield face -->
+  <path d="M16 3.5 L27.5 8 L27.5 18.5 C27.5 24.5 22 29 16 30.5 C10 29 4.5 24.5 4.5 18.5 L4.5 8 Z" fill="#FC8306"/>
+  <!-- Inner highlight -->
+  <path d="M16 6 L25 9.5 L25 18.5 C25 23 20.5 27 16 28.5 C11.5 27 7 23 7 18.5 L7 9.5 Z" fill="#FCA222"/>
+  <!-- Center dot/mark -->
+  <circle cx="16" cy="18" r="3.5" fill="#1a1a2e"/>
+  <circle cx="16" cy="18" r="2" fill="#FC8306"/>
+</svg>

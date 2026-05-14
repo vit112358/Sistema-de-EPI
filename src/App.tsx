@@ -289,7 +289,7 @@ export default function App() {
         <div className={`sidebar${sidebarOpen ? " open" : ""}`}>
           <div className="sidebar-logo">
             <div className="logo-icon" style={{ background: "transparent", padding: 0 }}>
-              <img src="/favicon.svg" style={{ width: "36px", height: "36px", objectFit: "contain" }} />
+              <img src="/favicon.svg" style={{ width: "60px", height: "60px", objectFit: "contain" }} />
             </div>
             <div>
               <div className="logo-text">SegurID</div>

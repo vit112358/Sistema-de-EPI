@@ -41,8 +41,8 @@ export function LoginPage({ onLogin }: Props) {
       <div className="login-bg" />
       <div className="login-card">
         <div className="login-logo">
-          <div style={{ fontSize: 48, marginBottom: 10 }}>🦺</div>
-          <div style={{ fontFamily: "Barlow Condensed", fontSize: 26, fontWeight: 800 }}>SISTEMA EPI</div>
+          <img src="/favicon.svg" alt="" style={{ width: 96, height: 96, marginBottom: -14 }} />
+          <div style={{ fontFamily: "Barlow Condensed", fontSize: 26, fontWeight: 800 }}>SegurID</div>
           <div style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono", letterSpacing: 1 }}>CONTROLE DE EQUIPAMENTOS · v2.1</div>
         </div>
         <div className="input-group"><label className="input-label">Usuário</label><input className="input" value={username} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setUsername(e.target.value); setErr(""); }} /></div>

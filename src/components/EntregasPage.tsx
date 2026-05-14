@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { jsPDF } from "jspdf";
 import type { Entrega, Epi, Funcionario, Toast, TipoAssinatura } from "../types";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -304,6 +304,10 @@ export function EntregasPage({ entregas, setEntregas, epis, funcionarios, curren
   const [ordemNome, setOrdemNome] = useState<"asc" | "desc" | null>(null);
   const [signModal, setSignModal] = useState<Entrega | null>(null);
   const [cancelConfirm, setCancelConfirm] = useState<Entrega | null>(null);
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => { setCurrentPage(1); }, [filter, busca, ordemNome, pageSize]);
 
   const gerarFicha = (entrega: Entrega) => {
     const fmtDataStr = (s: string) => { const [yr, mo, dy] = s.split("-"); return `${dy}/${mo}/${yr}`; };
@@ -457,6 +461,9 @@ export function EntregasPage({ entregas, setEntregas, epis, funcionarios, curren
   const toggleOrdem = () =>
     setOrdemNome(prev => prev === null ? "asc" : prev === "asc" ? "desc" : null);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginated  = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   return (
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
@@ -490,7 +497,7 @@ export function EntregasPage({ entregas, setEntregas, epis, funcionarios, curren
               </tr>
             </thead>
             <tbody>
-              {filtered.map(e => (
+              {paginated.map(e => (
                 <tr key={e.id}>
                   <td><span style={{ fontFamily: "IBM Plex Mono", color: "var(--text3)", fontSize: 12 }}>#{String(e.id).padStart(4,"0")}</span></td>
                   <td><span style={{ fontWeight: 600 }}>{e.funcionario.split(" ").slice(0,2).join(" ")}</span></td>
@@ -531,6 +538,24 @@ export function EntregasPage({ entregas, setEntregas, epis, funcionarios, curren
           </table>
         </div>
       </div>
+      {filtered.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>por página:</span>
+            {[10, 25, 50].map(n => (
+              <button key={n} className={`btn btn-sm ${pageSize === n ? "btn-primary" : "btn-ghost"}`} onClick={() => setPageSize(n)}>{n}</button>
+            ))}
+            <span style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginLeft: 8 }}>{filtered.length} registro{filtered.length !== 1 ? "s" : ""}</span>
+          </div>
+          {totalPages > 1 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button className="btn btn-ghost btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>← Anterior</button>
+              <span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text2)", minWidth: 70, textAlign: "center" }}>{currentPage} / {totalPages}</span>
+              <button className="btn btn-ghost btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Próxima →</button>
+            </div>
+          )}
+        </div>
+      )}
       {signModal && (
         <SignModal
           entrega={signModal}
