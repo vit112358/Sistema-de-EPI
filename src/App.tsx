@@ -101,11 +101,11 @@ export default function App() {
           apiFetch('/api/epis'),
           apiFetch('/api/users'),
         ]);
-        if (resE.ok)  { const d: Entrega[]     = await resE.json();  if (d?.length)  setEntregas(d); }
-        if (resF.ok)  { const d: Funcionario[]  = await resF.json();  if (d?.length)  setFuncionarios(d); }
-        if (resC.ok)  { const d: Cargo[]        = await resC.json();  if (d?.length)  setCargos(d); }
-        if (resEp.ok) { const d: Epi[]          = await resEp.json(); if (d?.length)  setEpis(d); }
-        if (resU.ok)  { const d: Usuario[]      = await resU.json();  if (d?.length)  setUsers(d); }
+        if (resE.ok)  { const d: Entrega[]     = await resE.json();  if (Array.isArray(d)) setEntregas(d); }
+        if (resF.ok)  { const d: Funcionario[]  = await resF.json();  if (Array.isArray(d)) setFuncionarios(d); }
+        if (resC.ok)  { const d: Cargo[]        = await resC.json();  if (Array.isArray(d)) setCargos(d); }
+        if (resEp.ok) { const d: Epi[]          = await resEp.json(); if (Array.isArray(d)) setEpis(d); }
+        if (resU.ok)  { const d: Usuario[]      = await resU.json();  if (Array.isArray(d)) setUsers(d); }
       } catch (err) {
         console.error('Erro de conexão com o Backend. Usando dados locais.', err);
       }

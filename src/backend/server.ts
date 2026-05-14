@@ -7,7 +7,12 @@ import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios
 
 const app = express();
 const PORT = 3000;
-const JWT_SECRET = process.env.JWT_SECRET ?? 'epi-seguranca-2024-jwt-secret-key';
+
+if (!process.env.JWT_SECRET) {
+    console.error('FATAL: JWT_SECRET não está definido. Configure a variável de ambiente antes de iniciar o servidor.');
+    process.exit(1);
+}
+const JWT_SECRET: string = process.env.JWT_SECRET;
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Backend rodando em http://localhost:${PORT} (e acessível na rede local)`);
@@ -99,6 +104,16 @@ const autenticar = (req: express.Request, res: express.Response, next: express.N
 };
 
 app.use(autenticar);
+
+// ─── Autorização admin ────────────────────────────────────────────────────────
+
+const soAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if ((req as any).usuario?.role !== 'admin') {
+        res.status(403).json({ error: 'Acesso restrito a administradores' });
+        return;
+    }
+    next();
+};
 
 // ─── Entregas ─────────────────────────────────────────────────────────────────
 
@@ -301,7 +316,7 @@ app.get('/api/users', async (_req, res) => {
     } catch { res.status(500).json({ error: 'Erro ao buscar usuários' }); }
 });
 
-app.post('/api/users', async (req, res) => {
+app.post('/api/users', soAdmin, async (req, res) => {
     try {
         const id = await criarUsuario(req.body);
         const { senha: _s, ...semSenha } = req.body;
@@ -309,16 +324,16 @@ app.post('/api/users', async (req, res) => {
     } catch { res.status(500).json({ error: 'Erro ao criar usuário' }); }
 });
 
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', soAdmin, async (req, res) => {
     try {
-        await atualizarUsuario(parseInt(req.params.id), req.body);
+        await atualizarUsuario(Number.parseInt(req.params.id as string), req.body);
         res.json({ success: true });
     } catch { res.status(500).json({ error: 'Erro ao atualizar usuário' }); }
 });
 
-app.delete('/api/users/:id', async (req, res) => {
+app.delete('/api/users/:id', soAdmin, async (req, res) => {
     try {
-        await deletarUsuario(parseInt(req.params.id));
+        await deletarUsuario(Number.parseInt(req.params.id as string));
         res.json({ success: true });
     } catch { res.status(500).json({ error: 'Erro ao deletar usuário' }); }
 });

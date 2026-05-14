@@ -25,33 +25,51 @@ export function criarEntrega(entrega: Entrega): Promise<number> {
     return new Promise((resolve, reject) => {
         const sqlEntrega = `INSERT INTO entregas (funcionario_id, funcionario, status, tipo_assinatura, confianca, data) VALUES (?, ?, ?, ?, ?, ?)`;
 
-        db.run(sqlEntrega, [
-            entrega.funcionario_id,
-            entrega.funcionario,
-            entrega.status,
-            entrega.tipo_assinatura,
-            entrega.confianca,
-            entrega.data
-        ], function (err) {
-            if (err) return reject(err);
+        db.run('BEGIN TRANSACTION', (errTx) => {
+            if (errTx) return reject(errTx);
 
-            const entregaId = this.lastID;
+            const rollback = (err: Error) => db.run('ROLLBACK', () => reject(err));
 
-            if (entrega.itens && entrega.itens.length > 0) {
+            db.run(sqlEntrega, [
+                entrega.funcionario_id,
+                entrega.funcionario,
+                entrega.status,
+                entrega.tipo_assinatura,
+                entrega.confianca,
+                entrega.data
+            ], function (err) {
+                if (err) return rollback(err);
+
+                const entregaId = this.lastID;
+
+                if (!entrega.itens || entrega.itens.length === 0) {
+                    return db.run('COMMIT', (err) => {
+                        if (err) return rollback(err);
+                        resolve(entregaId);
+                    });
+                }
+
                 const stmt = db.prepare(`INSERT INTO entrega_itens (entrega_id, epi_id, nome, img, qtd, ca) VALUES (?, ?, ?, ?, ?, ?)`);
                 entrega.itens.forEach(item => {
                     stmt.run(entregaId, item.epi_id, item.nome, item.img, item.qtd, item.ca ?? null);
                 });
-                stmt.finalize();
+                stmt.finalize((err) => {
+                    if (err) return rollback(err);
 
-                const stockStmt = db.prepare(`UPDATE epis SET estoque = MAX(0, estoque - ?) WHERE id = ?`);
-                entrega.itens.forEach(item => {
-                    stockStmt.run(item.qtd, item.epi_id);
+                    const stockStmt = db.prepare(`UPDATE epis SET estoque = MAX(0, estoque - ?) WHERE id = ?`);
+                    entrega.itens.forEach(item => {
+                        stockStmt.run(item.qtd, item.epi_id);
+                    });
+                    stockStmt.finalize((err) => {
+                        if (err) return rollback(err);
+
+                        db.run('COMMIT', (err) => {
+                            if (err) return rollback(err);
+                            resolve(entregaId);
+                        });
+                    });
                 });
-                stockStmt.finalize();
-            }
-
-            resolve(entregaId);
+            });
         });
     });
 }
@@ -85,31 +103,50 @@ export function listarEntregas(): Promise<Entrega[]> {
 // UPDATE (Atualizar status e assinatura)
 export function atualizarStatusEntrega(id: number, dados: Partial<Entrega>): Promise<void> {
     return new Promise((resolve, reject) => {
-        const updateStatus = () => {
-            const sql = `UPDATE entregas SET status = ?, tipo_assinatura = ?, confianca = ? WHERE id = ?`;
-            db.run(sql, [dados.status, dados.tipo_assinatura, dados.confianca, id], (err) => {
-                if (err) reject(err); else resolve();
-            });
-        };
+        const sqlStatus = `UPDATE entregas SET status = ?, tipo_assinatura = ?, confianca = ? WHERE id = ?`;
+        const paramsStatus = [dados.status, dados.tipo_assinatura, dados.confianca, id];
 
-        if (dados.status === 'cancelado') {
-            db.get(`SELECT status FROM entregas WHERE id = ?`, [id], (errCheck, row: any) => {
-                if (errCheck) return reject(errCheck);
-                if (!row || row.status === 'cancelado') return updateStatus();
+        if (dados.status !== 'cancelado') {
+            db.run(sqlStatus, paramsStatus, (err) => { if (err) reject(err); else resolve(); });
+            return;
+        }
 
-                db.all(`SELECT epi_id, qtd FROM entrega_itens WHERE entrega_id = ?`, [id], (errItens, itens: any[]) => {
-                    if (errItens) return reject(errItens);
+        db.get(`SELECT status FROM entregas WHERE id = ?`, [id], (errCheck, row: any) => {
+            if (errCheck) return reject(errCheck);
+
+            if (!row || row.status === 'cancelado') {
+                db.run(sqlStatus, paramsStatus, (err) => { if (err) reject(err); else resolve(); });
+                return;
+            }
+
+            db.all(`SELECT epi_id, qtd FROM entrega_itens WHERE entrega_id = ?`, [id], (errItens, itens: any[]) => {
+                if (errItens) return reject(errItens);
+
+                db.run('BEGIN TRANSACTION', (errTx) => {
+                    if (errTx) return reject(errTx);
+
+                    const rollback = (err: Error) => db.run('ROLLBACK', () => reject(err));
+
+                    const commitStatus = () => {
+                        db.run(sqlStatus, paramsStatus, (err) => {
+                            if (err) return rollback(err);
+                            db.run('COMMIT', (err) => { if (err) return rollback(err); resolve(); });
+                        });
+                    };
+
                     if (itens?.length > 0) {
                         const stmt = db.prepare(`UPDATE epis SET estoque = estoque + ? WHERE id = ?`);
                         itens.forEach(item => stmt.run(item.qtd, item.epi_id));
-                        stmt.finalize();
+                        stmt.finalize((err) => {
+                            if (err) return rollback(err);
+                            commitStatus();
+                        });
+                    } else {
+                        commitStatus();
                     }
-                    updateStatus();
                 });
             });
-        } else {
-            updateStatus();
-        }
+        });
     });
 }
 
