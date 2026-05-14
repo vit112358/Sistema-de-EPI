@@ -165,6 +165,10 @@ export function inicializarBancoDeDados() {
                 console.error('Erro ao criar tabela de entregas:', err.message);
             } else {
                 console.log('Tabela "entregas" verificada/criada com sucesso.');
+                db.all(`PRAGMA table_info(entregas)`, [], (_e, cols: any[]) => {
+                    if (!cols.some(c => c.name === 'assinatura_img'))
+                        db.run(`ALTER TABLE entregas ADD COLUMN assinatura_img TEXT`);
+                });
             }
         });
 

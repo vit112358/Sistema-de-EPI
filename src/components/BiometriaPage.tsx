@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { jsPDF } from "jspdf";
 import type { Funcionario, Biometria, Toast } from "../types";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { extractDescriptor, descriptorToJson, detectLandmarks, computeEAR } from "../faceApi";
@@ -244,6 +245,7 @@ export function BiometriaPage({ funcionarios, setFuncionarios, toast }: Props) {
   const [confirm, setConfirm] = useState<{ bioId: number; funcId: number; funcNome: string; tipo: string } | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [lgpdConsent, setLgpdConsent] = useState(false);
+  const [termoDownloaded, setTermoDownloaded] = useState(false);
 
   useEffect(() => {
     const found = funcionarios.find(f => f.id === func?.id);
@@ -286,6 +288,130 @@ export function BiometriaPage({ funcionarios, setFuncionarios, toast }: Props) {
         }, 400);
       }
     }, 180);
+  };
+
+  const gerarTermoLGPD = () => {
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const pageW = 210;
+    const M = 20;
+    const cW = pageW - M * 2;
+    const GOLD: [number, number, number] = [184, 134, 11];
+    const LH = 5;
+    const today = new Date().toLocaleDateString("pt-BR");
+    let y = 22;
+
+    // Título
+    doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.setTextColor(20, 20, 20);
+    doc.text("Termo de Consentimento para Tratamento de Dados Biométricos", M, y);
+    y += 7;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(110, 110, 110);
+    doc.text("Controle e entrega de Equipamentos de Proteção Individual (EPIs)", M, y);
+    y += 5;
+    doc.setDrawColor(...GOLD); doc.setLineWidth(0.8);
+    doc.line(M, y, pageW - M, y);
+    doc.setLineWidth(0.2); doc.setDrawColor(0, 0, 0);
+    y += 8;
+
+    // Caixa de informação
+    const infoFirst = "Em conformidade com a Lei Geral de Proteção de Dados (Lei 13.709/2018), informamos que:";
+    const bullets = [
+      "A imagem facial e o descritor biométrico serão armazenados localmente para fins de verificação de identidade na entrega de EPIs.",
+      "Os dados não serão compartilhados com terceiros.",
+      "O titular pode solicitar a exclusão dos dados a qualquer momento na aba Gerenciar.",
+      'A base legal é o legítimo interesse do empregador para controle de segurança (Art. 11, II, "a" da LGPD).',
+    ];
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(50, 50, 50);
+    const firstW = doc.splitTextToSize(infoFirst, cW - 8);
+    const bulletsW = bullets.map(b => doc.splitTextToSize(`• ${b}`, cW - 16));
+    const totalL = firstW.length + bulletsW.reduce((s, b) => s + b.length, 0);
+    const boxH = totalL * LH + 14;
+    doc.setFillColor(248, 246, 238); doc.setDrawColor(210, 205, 190);
+    doc.rect(M, y, cW, boxH, "FD");
+    y += 6;
+    doc.text(firstW, M + 5, y); y += firstW.length * LH + 2;
+    bulletsW.forEach(w => { doc.text(w, M + 10, y); y += w.length * LH + 1; });
+    y += 6;
+
+    // Seção Identificação
+    const sectionHeader = (label: string) => {
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(...GOLD);
+      doc.text(label, M, y); y += 3;
+      doc.setDrawColor(...GOLD); doc.setLineWidth(0.4);
+      doc.line(M, y, pageW - M, y);
+      doc.setLineWidth(0.2); doc.setDrawColor(180, 180, 180);
+      y += 7;
+    };
+
+    sectionHeader("IDENTIFICAÇÃO DO COLABORADOR");
+
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(120, 120, 120);
+    doc.text("Nome completo do colaborador", M, y); y += 4;
+    doc.setFontSize(9); doc.setTextColor(20, 20, 20);
+    doc.text(func?.nome ?? "", M, y); y += 2;
+    doc.line(M, y, pageW - M, y); y += 8;
+
+    const c4 = [M, M + cW * 0.25, M + cW * 0.5, M + cW * 0.75];
+    const l4 = ["CPF", "Matrícula / Crachá", "Setor / Departamento", "Cargo"];
+    const v4 = ["", func?.matricula ?? "", func?.setor ?? "", func?.cargo ?? ""];
+    doc.setFontSize(8); doc.setTextColor(120, 120, 120);
+    l4.forEach((lbl, i) => doc.text(lbl, c4[i], y)); y += 4;
+    doc.setFontSize(9); doc.setTextColor(20, 20, 20);
+    v4.forEach((v, i) => doc.text(v, c4[i], y)); y += 2;
+    c4.forEach((x, i) => { const w = i < 3 ? c4[i + 1] - x - 4 : pageW - M - x; doc.line(x, y, x + w, y); });
+    y += 10;
+
+    // Seção Declaração
+    sectionHeader("DECLARAÇÃO DE CONSENTIMENTO");
+    const decl = `Eu, ${func?.nome ?? "_".repeat(40)}, portador(a) do CPF n.º ___.___.___-__, declaro que fui devidamente informado(a) sobre o tratamento dos meus dados biométricos faciais pela empresa, conforme disposto neste termo, e consinto livremente com a coleta, armazenamento e uso dos meus dados biométricos exclusivamente para fins de controle de entrega de EPIs, nos termos da Lei Geral de Proteção de Dados (Lei n.º 13.709/2018).`;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(30, 30, 30);
+    const declW = doc.splitTextToSize(decl, cW - 16);
+    const declH = declW.length * LH + 12;
+    doc.setFillColor(248, 246, 238); doc.setDrawColor(200, 195, 180);
+    doc.rect(M, y, cW, declH, "FD");
+    doc.setDrawColor(...GOLD); doc.setLineWidth(1.5);
+    doc.line(M, y, M, y + declH);
+    doc.setLineWidth(0.2); doc.setDrawColor(180, 180, 180);
+    doc.text(declW, M + 8, y + 6, { align: "justify", maxWidth: cW - 16 });
+    y += declH + 8;
+
+    // Seção Assinaturas
+    sectionHeader("ASSINATURAS");
+    y += 6;
+    const sigW = cW * 0.42;
+    const s1 = M, s2 = pageW - M - sigW;
+    doc.line(s1, y, s1 + sigW, y); doc.line(s2, y, s2 + sigW, y); y += 5;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(80, 80, 80);
+    doc.text("Assinatura do colaborador", s1 + sigW / 2, y, { align: "center" });
+    doc.text("Assinatura do responsável pela entrega", s2 + sigW / 2, y, { align: "center" });
+    y += 4;
+    doc.text("Nome / CPF", s1 + sigW / 2, y, { align: "center" });
+    doc.text("Nome / Cargo", s2 + sigW / 2, y, { align: "center" });
+    y += 10;
+
+    // Seção Data e Local
+    sectionHeader("DATA E LOCAL");
+    const c3 = [M, M + cW * 0.4, M + cW * 0.7];
+    const l3 = ["Local (Cidade / UF)", "Data", "Horário"];
+    const v3 = ["", today, ""];
+    const w3 = [cW * 0.36, cW * 0.26, cW * 0.26];
+    doc.setFontSize(8); doc.setTextColor(120, 120, 120);
+    l3.forEach((lbl, i) => doc.text(lbl, c3[i], y)); y += 4;
+    doc.setFontSize(9); doc.setTextColor(20, 20, 20);
+    v3.forEach((v, i) => doc.text(v, c3[i], y)); y += 2;
+    c3.forEach((x, i) => doc.line(x, y, x + w3[i], y)); y += 10;
+
+    doc.setDrawColor(...GOLD); doc.setLineWidth(0.4);
+    doc.line(M, y, pageW - M, y);
+    doc.setLineWidth(0.2); y += 6;
+
+    // Rodapé
+    const footer = "Este documento constitui prova de consentimento informado nos termos do Art. 8.º da LGPD. O colaborador poderá revogar este consentimento a qualquer momento mediante solicitação formal ao setor de RH ou na aba Gerenciar do sistema. Uma via deste termo deverá ser entregue ao colaborador e outra mantida em arquivo pelo empregador.";
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(80, 80, 80);
+    doc.text(doc.splitTextToSize(footer, cW), M, y, { align: "justify", maxWidth: cW });
+
+    const nomeSafe = (func?.nome ?? "colaborador").replace(/\s+/g, "_");
+    doc.save(`termo_lgpd_${nomeSafe}.pdf`);
+    setTermoDownloaded(true);
   };
 
   const handleIniciarCaptura = () => {
@@ -377,7 +503,7 @@ export function BiometriaPage({ funcionarios, setFuncionarios, toast }: Props) {
           <div className="card"><div className="card-body" style={{ textAlign: "center", padding: 40 }}>
             <div style={{ fontSize: 60, marginBottom: 16 }}>{type === "facial" ? "👤" : "👆"}</div>
             <div style={{ fontFamily: "Barlow Condensed", fontSize: 24, fontWeight: 800, color: "var(--green)", marginBottom: 16 }}>BIOMETRIA REGISTRADA</div>
-            <button className="btn btn-primary" onClick={() => { setDone(false); setType(null); setProgress(0); setLgpdConsent(false); }}>Registrar nova</button>
+            <button className="btn btn-primary" onClick={() => { setDone(false); setType(null); setProgress(0); setLgpdConsent(false); setTermoDownloaded(false); }}>Registrar nova</button>
           </div></div>
         </div>
       ) : (
@@ -385,7 +511,7 @@ export function BiometriaPage({ funcionarios, setFuncionarios, toast }: Props) {
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-header"><span className="card-title">Funcionário</span></div>
             <div className="card-body">
-              <select className="input" value={func?.id} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => { setFunc(funcionarios.find(f => f.id === +e.target.value)); setType(null); setDone(false); setLgpdConsent(false); }}>
+              <select className="input" value={func?.id} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => { setFunc(funcionarios.find(f => f.id === +e.target.value)); setType(null); setDone(false); setLgpdConsent(false); setTermoDownloaded(false); }}>
                 {funcionarios.map(f => <option key={f.id} value={f.id}>{f.nome} — {f.matricula}</option>)}
               </select>
               {func && func.biometrias.length > 0 && (
@@ -397,14 +523,14 @@ export function BiometriaPage({ funcionarios, setFuncionarios, toast }: Props) {
           </div>
           <div className="bio-panel">
             {[{ t: "facial", icon: "👤", title: "Biometria Facial", desc: "Captura 128 pontos de referência do rosto" }, { t: "digital", icon: "👆", title: "Impressão Digital", desc: "Leitura via sensor biométrico (ZFM-20 / Suprema)" }].map(o => (
-              <div key={o.t} className={`bio-option${type === o.t ? " active" : ""}`} onClick={() => { setType(o.t); setLgpdConsent(false); }}>
+              <div key={o.t} className={`bio-option${type === o.t ? " active" : ""}`} onClick={() => { setType(o.t); setLgpdConsent(false); setTermoDownloaded(false); }}>
                 <div className="bio-option-icon">{o.icon}</div>
                 <div><div className="bio-option-title">{o.title}</div><div className="bio-option-desc">{o.desc}</div></div>
                 <div style={{ marginLeft: "auto" }}>{type === o.t ? <span style={{ color: "var(--orange)", fontSize: 20 }}>●</span> : <span style={{ color: "var(--border2)", fontSize: 20 }}>○</span>}</div>
               </div>
             ))}
           </div>
-          {type === "facial" && !lgpdConsent && (
+          {type === "facial" && !(lgpdConsent && termoDownloaded) && (
             <div style={{ marginTop: 16, background: "rgba(255,171,0,0.07)", border: "1px solid rgba(255,171,0,0.3)", borderRadius: 10, padding: "16px 18px" }}>
               <div style={{ fontFamily: "Barlow Condensed", fontWeight: 700, fontSize: 15, color: "var(--orange)", marginBottom: 8, letterSpacing: 0.5 }}>LGPD — Consentimento para Dados Biométricos</div>
               <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.6, marginBottom: 12 }}>
@@ -420,9 +546,15 @@ export function BiometriaPage({ funcionarios, setFuncionarios, toast }: Props) {
                 <input type="checkbox" style={{ marginTop: 2, flexShrink: 0 }} checked={lgpdConsent} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLgpdConsent(e.target.checked)} />
                 <span>O funcionário <strong>{func?.nome}</strong> foi informado e consente com o tratamento dos dados biométricos faciais conforme descrito acima.</span>
               </label>
+              {lgpdConsent && (
+                <div style={{ marginTop: 14, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+                  <button className="btn btn-primary" onClick={gerarTermoLGPD}>⬇ Baixar Termo</button>
+                  <span style={{ fontSize: 11, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>Após o download, a câmera será liberada para captura.</span>
+                </div>
+              )}
             </div>
           )}
-          {type === "facial" && lgpdConsent && !cameraActive && (
+          {type === "facial" && lgpdConsent && termoDownloaded && !cameraActive && (
             <div className="face-capture" style={{ height: 200, marginTop: 16, borderRadius: 10 }}>
               <div className="face-guide" />
               {scanning && <div className="scan-line" />}
@@ -448,7 +580,7 @@ export function BiometriaPage({ funcionarios, setFuncionarios, toast }: Props) {
               <div className="confidence-bar"><div className="confidence-fill" style={{ width: progress + "%", background: "var(--orange)" }} /></div>
             </div>
           )}
-          <button className="btn btn-primary" style={{ marginTop: 16 }} disabled={!type || scanning || cameraActive || (type === "facial" && !lgpdConsent)} onClick={handleIniciarCaptura}>
+          <button className="btn btn-primary" style={{ marginTop: 16 }} disabled={!type || scanning || cameraActive || (type === "facial" && (!lgpdConsent || !termoDownloaded))} onClick={handleIniciarCaptura}>
             {scanning ? "⏳ Processando..." : "Iniciar Captura"}
           </button>
         </div>

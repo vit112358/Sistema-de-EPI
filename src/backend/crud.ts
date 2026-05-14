@@ -18,12 +18,13 @@ export interface Entrega {
     confianca?: number | null;
     data: string;
     itens: EntregaItem[];
+    assinatura_img?: string | null;
 }
 
 // CREATE
 export function criarEntrega(entrega: Entrega): Promise<number> {
     return new Promise((resolve, reject) => {
-        const sqlEntrega = `INSERT INTO entregas (funcionario_id, funcionario, status, tipo_assinatura, confianca, data) VALUES (?, ?, ?, ?, ?, ?)`;
+        const sqlEntrega = `INSERT INTO entregas (funcionario_id, funcionario, status, tipo_assinatura, confianca, data, assinatura_img) VALUES (?, ?, ?, ?, ?, ?, ?)`;
 
         db.run('BEGIN TRANSACTION', (errTx) => {
             if (errTx) return reject(errTx);
@@ -36,7 +37,8 @@ export function criarEntrega(entrega: Entrega): Promise<number> {
                 entrega.status,
                 entrega.tipo_assinatura,
                 entrega.confianca,
-                entrega.data
+                entrega.data,
+                entrega.assinatura_img ?? null,
             ], function (err) {
                 if (err) return rollback(err);
 
@@ -103,8 +105,8 @@ export function listarEntregas(): Promise<Entrega[]> {
 // UPDATE (Atualizar status e assinatura)
 export function atualizarStatusEntrega(id: number, dados: Partial<Entrega>): Promise<void> {
     return new Promise((resolve, reject) => {
-        const sqlStatus = `UPDATE entregas SET status = ?, tipo_assinatura = ?, confianca = ? WHERE id = ?`;
-        const paramsStatus = [dados.status, dados.tipo_assinatura, dados.confianca, id];
+        const sqlStatus = `UPDATE entregas SET status = ?, tipo_assinatura = ?, confianca = ?, assinatura_img = ? WHERE id = ?`;
+        const paramsStatus = [dados.status, dados.tipo_assinatura, dados.confianca, dados.assinatura_img ?? null, id];
 
         if (dados.status !== 'cancelado') {
             db.run(sqlStatus, paramsStatus, (err) => { if (err) reject(err); else resolve(); });

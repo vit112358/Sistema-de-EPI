@@ -78,7 +78,11 @@ export function CadastroUsuariosPage({ users, setUsers, currentUser, toast }: Pr
                     {u.id === currentUser.id && <span className="badge badge-orange" style={{ marginTop: 4 }}>Você</span>}
                   </td>
                   <td><span style={{ fontFamily: "IBM Plex Mono", fontSize: 12 }}>{u.username}</span></td>
-                  <td>{u.role === "admin" ? <span className="badge badge-purple">Admin</span> : <span className="badge badge-gray">Operador</span>}</td>
+                  <td>
+                    {u.role === "admin"       ? <span className="badge badge-purple">Admin</span>
+                    : u.role === "colaborador" ? <span className="badge badge-green">Colaborador</span>
+                    :                           <span className="badge badge-gray">Operador</span>}
+                  </td>
                   <td>
                     <div className="action-btns">
                       <button className="btn btn-ghost btn-xs" onClick={() => openEdit(u)}>✏️ Editar</button>
@@ -110,6 +114,7 @@ export function CadastroUsuariosPage({ users, setUsers, currentUser, toast }: Pr
                 <select className="input" value={form.role} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm(p => ({ ...p, role: e.target.value }))}>
                   <option value="admin">Administrador</option>
                   <option value="operador">Operador</option>
+                  <option value="colaborador">Colaborador</option>
                 </select>
               </div>
             </div>

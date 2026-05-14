@@ -15,7 +15,7 @@ interface SignModalProps {
   funcionarios: Funcionario[];
   currentUserRole: string;
   onClose: () => void;
-  onSign: (tipo: TipoAssinatura, confianca: number | null) => void;
+  onSign: (tipo: TipoAssinatura, confianca: number | null, sigImg: string | null) => void;
 }
 
 function SignModal({ entrega, funcionarios, currentUserRole, onClose, onSign }: SignModalProps) {
@@ -96,13 +96,18 @@ function SignModal({ entrega, funcionarios, currentUserRole, onClose, onSign }: 
 
   const startSign = () => {
     if (!canSign) return;
+    const sigImg = sigType === "facial"
+      ? facePhoto
+      : sigType === "manual" && canvasRef.current
+        ? canvasRef.current.toDataURL("image/png")
+        : null;
     setSigning(true); setProgress(0);
     let p = 0;
     const iv = setInterval(() => {
       p += Math.random() * 15;
       if (p >= 100) {
         clearInterval(iv);
-        setTimeout(() => onSign(sigType! as TipoAssinatura, sigType === "facial" ? faceScore : null), 400);
+        setTimeout(() => onSign(sigType! as TipoAssinatura, sigType === "facial" ? faceScore : null, sigImg), 400);
       } else setProgress(p);
     }, 150);
   };
@@ -337,15 +342,39 @@ export function EntregasPage({ entregas, setEntregas, epis, funcionarios, curren
 
     const sigLineW = 80;
     const sigLineX = (pageW - sigLineW) / 2;
+
+    if (entrega.assinatura_img) {
+      const isJpeg = entrega.assinatura_img.startsWith("data:image/jpeg");
+      if (entrega.tipo_assinatura === "manual") {
+        doc.addImage(entrega.assinatura_img, "PNG", sigLineX, y, sigLineW, 20);
+        y += 22;
+      } else if (entrega.tipo_assinatura === "facial") {
+        const photoSz = 22;
+        const textX = sigLineX + photoSz + 3;
+        doc.addImage(entrega.assinatura_img, isJpeg ? "JPEG" : "PNG", sigLineX, y, photoSz, photoSz);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(130, 130, 130);
+        doc.text("Assinado biometricamente por", textX, y + 8);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        doc.text(nomeFuncionario, textX, y + 16);
+        doc.setFont("helvetica", "normal");
+        y += photoSz + 4;
+      }
+    }
+
     doc.setDrawColor(0, 0, 0);
     doc.line(sigLineX, y, sigLineX + sigLineW, y);
     y += 5;
     doc.setFontSize(9);
-    doc.text(nomeFuncionario, pageW / 2, y, { align: "center" });
-    y += 4;
+    if (entrega.tipo_assinatura !== "facial" || !entrega.assinatura_img) {
+      doc.text(nomeFuncionario, pageW / 2, y, { align: "center" });
+      y += 4;
+    }
     doc.setTextColor(100, 100, 100);
-    const sigLabel = entrega.tipo_assinatura === "facial"  ? "Assinado biometricamente (Facial)"
-                   : entrega.tipo_assinatura === "digital" ? "Assinado biometricamente (Digital)"
+    const sigLabel = entrega.tipo_assinatura === "digital" ? "Assinado biometricamente (Digital)"
                    : "Assinatura do Funcionário";
     doc.text(sigLabel, pageW / 2, y, { align: "center" });
     doc.setTextColor(0, 0, 0);
@@ -398,12 +427,12 @@ export function EntregasPage({ entregas, setEntregas, epis, funcionarios, curren
     doc.save(`ficha_epi_${nomeFuncionario.replace(/\s+/g, "_")}_${entrega.data}.pdf`);
   };
 
-  const doSign = (id: number | undefined, tipo: TipoAssinatura, confianca: number | null) => {
+  const doSign = (id: number | undefined, tipo: TipoAssinatura, confianca: number | null, sigImg: string | null) => {
     const entrega = entregas.find(e => e.id === id);
-    setEntregas(prev => prev.map(e => e.id === id ? { ...e, status: "assinado", tipo_assinatura: tipo, confianca } : e));
+    setEntregas(prev => prev.map(e => e.id === id ? { ...e, status: "assinado", tipo_assinatura: tipo, confianca, assinatura_img: sigImg } : e));
     setSignModal(null);
     toast("Entrega assinada com sucesso!", "success");
-    if (entrega) gerarFicha({ ...entrega, status: "assinado", tipo_assinatura: tipo, confianca });
+    if (entrega) gerarFicha({ ...entrega, status: "assinado", tipo_assinatura: tipo, confianca, assinatura_img: sigImg });
   };
 
   const doCancel = (id: number | undefined) => {
@@ -508,7 +537,7 @@ export function EntregasPage({ entregas, setEntregas, epis, funcionarios, curren
           funcionarios={funcionarios}
           currentUserRole={currentUserRole}
           onClose={() => setSignModal(null)}
-          onSign={(tipo, confianca) => doSign(signModal.id, tipo, confianca)}
+          onSign={(tipo, confianca, sigImg) => doSign(signModal.id, tipo, confianca, sigImg)}
         />
       )}
       {cancelConfirm && (

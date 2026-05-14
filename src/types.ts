@@ -57,6 +57,7 @@ export interface Entrega {
   confianca?: number | null;
   data: string;
   itens: EntregaItem[];
+  assinatura_img?: string | null;
 }
 
 export interface Cargo {

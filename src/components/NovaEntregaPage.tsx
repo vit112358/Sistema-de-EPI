@@ -142,6 +142,7 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
     if (sigType === "facial" && faceStage !== "result") return;
     if (!sigType || (sigType === "manual" && !hasSig)) return;
 
+    let sigImg: string | null = null;
     if (sigType === "manual" && canvasRef.current) {
       const c = canvasRef.current;
       const tmp = document.createElement("canvas");
@@ -150,8 +151,10 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, tmp.width, tmp.height);
       ctx.drawImage(c, 0, 0);
-      setSigImageUrl(tmp.toDataURL("image/png"));
+      sigImg = tmp.toDataURL("image/png");
+      setSigImageUrl(sigImg);
     } else if (sigType === "facial") {
+      sigImg = facePhoto;
       setSigImageUrl(facePhoto);
     } else {
       setSigImageUrl(null);
@@ -166,7 +169,7 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
         setTimeout(() => {
           const confianca = sigType === "facial" ? faceScore : null;
           const itens: EntregaItem[] = selEpis.map(e => ({ epi_id: e.id!, nome: e.nome, img: e.img ?? "", ca: e.ca, qtd: qtds[e.itemKey] || 1 }));
-          setEntregas(prev => [{ id: newId, funcionario_id: func!.id!, funcionario: func!.nome, data: new Date().toISOString().split("T")[0], itens, status: "assinado", tipo_assinatura: sigType as TipoAssinatura | null, confianca }, ...prev]);
+          setEntregas(prev => [{ id: newId, funcionario_id: func!.id!, funcionario: func!.nome, data: new Date().toISOString().split("T")[0], itens, status: "assinado", tipo_assinatura: sigType as TipoAssinatura | null, confianca, assinatura_img: sigImg }, ...prev]);
           setSigning(false); setDone(true); setStep(4);
           toast("Entrega registrada e assinada!", "success");
         }, 500);

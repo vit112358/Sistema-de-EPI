@@ -130,6 +130,7 @@ export default function App() {
             funcionario_id: nova.funcionario_id, funcionario: nova.funcionario,
             status: nova.status, tipo_assinatura: nova.tipo_assinatura,
             confianca: nova.confianca, data: nova.data, itens: nova.itens,
+            assinatura_img: nova.assinatura_img ?? null,
           }),
         })
           .then(r => r.json())
@@ -147,7 +148,7 @@ export default function App() {
           apiFetch(`/api/entregas/${nova.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: nova.status, tipo_assinatura: nova.tipo_assinatura, confianca: nova.confianca }),
+            body: JSON.stringify({ status: nova.status, tipo_assinatura: nova.tipo_assinatura, confianca: nova.confianca, assinatura_img: nova.assinatura_img ?? null }),
           })
             .then(() => {
               if (nova.status === 'cancelado')
@@ -271,7 +272,7 @@ export default function App() {
   if (!currentUser) return (
     <>
       <style>{css}</style>
-      <LoginPage onLogin={setCurrentUser} />
+      <LoginPage onLogin={(user) => { setCurrentUser(user); if (user.role === 'colaborador') setPage('entregas'); }} />
       <ToastContainer toasts={toasts} />
     </>
   );
@@ -297,7 +298,11 @@ export default function App() {
           </div>
           <nav className="nav">
             {NAV
-              .filter(item => !(item.id === "cadastro-usuarios" && currentUser.role !== "admin"))
+              .filter(item => {
+                if (currentUser.role === 'colaborador') return item.id === 'entregas';
+                if (currentUser.role !== 'admin') return item.id !== 'cadastro-usuarios';
+                return true;
+              })
               .map(item => (
                 <div key={item.id}>
                   {"section" in item && item.section && <div className="nav-section">{item.section}</div>}
