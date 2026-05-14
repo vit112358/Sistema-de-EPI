@@ -574,7 +574,3 @@ Diferença entre os três tipos
 - ui: abre uma interface visual pra debugar o teste
 
 ![img_1.png](img_1.png)
-
-Checar
-Senha admin123 hardcoded no seed — todo cliente novo sobe com ela. Precisa forçar troca no primeiro login ou pelo menos avisar em tela.
-
