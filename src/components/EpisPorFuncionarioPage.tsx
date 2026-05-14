@@ -15,6 +15,8 @@ export function EpisPorFuncionarioPage({ entregas, funcionarios }: Props) {
   const [dataInicio, setDataInicio] = useState(inicioMes);
   const [dataFim,    setDataFim]    = useState(hoje);
   const [busca,      setBusca]      = useState("");
+  const [pageSize,   setPageSize]   = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fmtDate = (s: string) => {
     const [yr, mo, dy] = s.split("-");
@@ -31,6 +33,9 @@ export function EpisPorFuncionarioPage({ entregas, funcionarios }: Props) {
       ents.length > 0 &&
       (!busca.trim() || func.nome.toLowerCase().includes(busca.trim().toLowerCase()))
     );
+
+  const totalPages = Math.max(1, Math.ceil(linhas.length / pageSize));
+  const paginadas  = linhas.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const gerarFicha = (func: Funcionario, ents: Entrega[]) => {
     const doc   = new jsPDF({ unit: "mm", format: "a4" });
@@ -186,7 +191,7 @@ export function EpisPorFuncionarioPage({ entregas, funcionarios }: Props) {
               <label className="input-label">De</label>
               <input
                 type="date" className="input" value={dataInicio}
-                onChange={e => setDataInicio(e.target.value)}
+                onChange={e => { setDataInicio(e.target.value); setCurrentPage(1); }}
                 style={{ width: 160 }}
               />
             </div>
@@ -194,7 +199,7 @@ export function EpisPorFuncionarioPage({ entregas, funcionarios }: Props) {
               <label className="input-label">Até</label>
               <input
                 type="date" className="input" value={dataFim}
-                onChange={e => setDataFim(e.target.value)}
+                onChange={e => { setDataFim(e.target.value); setCurrentPage(1); }}
                 style={{ width: 160 }}
               />
             </div>
@@ -202,11 +207,11 @@ export function EpisPorFuncionarioPage({ entregas, funcionarios }: Props) {
               <label className="input-label">Funcionário</label>
               <input
                 type="text" className="input" placeholder="Filtrar por nome..."
-                value={busca} onChange={e => setBusca(e.target.value)}
+                value={busca} onChange={e => { setBusca(e.target.value); setCurrentPage(1); }}
               />
             </div>
             {busca && (
-              <button className="btn btn-ghost btn-sm" style={{ marginBottom: 0 }} onClick={() => setBusca("")}>
+              <button className="btn btn-ghost btn-sm" style={{ marginBottom: 0 }} onClick={() => { setBusca(""); setCurrentPage(1); }}>
                 ✕ Limpar
               </button>
             )}
@@ -235,7 +240,7 @@ export function EpisPorFuncionarioPage({ entregas, funcionarios }: Props) {
                   </td>
                 </tr>
               )}
-              {linhas.map(({ func, ents }) => (
+              {paginadas.map(({ func, ents }) => (
                 <tr key={func.id}>
                   <td><span style={{ fontWeight: 600 }}>{func.nome}</span></td>
                   <td><span style={{ fontSize: 13, color: "var(--text2)" }}>{func.cargo}</span></td>
@@ -260,6 +265,24 @@ export function EpisPorFuncionarioPage({ entregas, funcionarios }: Props) {
             </tbody>
           </table>
         </div>
+        {linhas.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, padding: "12px 16px", borderTop: "1px solid var(--border)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>por página:</span>
+              {[10, 25, 50].map(n => (
+                <button key={n} className={`btn btn-sm ${pageSize === n ? "btn-primary" : "btn-ghost"}`} onClick={() => { setPageSize(n); setCurrentPage(1); }}>{n}</button>
+              ))}
+              <span style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginLeft: 8 }}>{linhas.length} funcionário{linhas.length !== 1 ? "s" : ""}</span>
+            </div>
+            {totalPages > 1 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button className="btn btn-ghost btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>← Anterior</button>
+                <span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text2)", minWidth: 70, textAlign: "center" }}>{currentPage} / {totalPages}</span>
+                <button className="btn btn-ghost btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Próxima →</button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 /src/backend/bd_epi.sqlite
 /resources/
+backup.sh
+deploy.sh

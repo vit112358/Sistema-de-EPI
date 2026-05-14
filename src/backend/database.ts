@@ -99,6 +99,19 @@ const INIT_LOGIN_ATTEMPTS = `
   );
 `;
 
+const INIT_AUDIT_LOG = `
+  CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    momento DATETIME DEFAULT CURRENT_TIMESTAMP,
+    usuario_id INTEGER,
+    usuario TEXT NOT NULL,
+    acao TEXT NOT NULL,
+    entidade TEXT,
+    entidade_id INTEGER,
+    detalhe TEXT
+  );
+`;
+
 const INIT_EPIS = `
   CREATE TABLE IF NOT EXISTS epis (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -125,6 +138,11 @@ export function inicializarBancoDeDados() {
         db.run(INIT_LOGIN_ATTEMPTS, (err) => {
             if (err) console.error('Erro ao criar tabela login_attempts:', err.message);
             else db.run(`DELETE FROM login_attempts WHERE momento <= datetime('now', '-15 minutes')`);
+        });
+
+        db.run(INIT_AUDIT_LOG, (err) => {
+            if (err) console.error('Erro ao criar tabela audit_log:', err.message);
+            else console.log('Tabela "audit_log" verificada/criada com sucesso.');
         });
 
         db.run(INIT_USUARIOS, (err) => {

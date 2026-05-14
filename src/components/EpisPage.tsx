@@ -101,6 +101,11 @@ export function EpisPage({ epis, setEpis, toast }: Props) {
   const [addModal, setAddModal] = useState(false);
   const [editEpi, setEditEpi] = useState<Epi | null>(null);
   const [confirmDel, setConfirmDel] = useState<Epi | null>(null);
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalPages = Math.max(1, Math.ceil(epis.length / pageSize));
+  const paginated  = epis.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const saveEpi = (f: Epi) => {
     if (f.id) {
@@ -132,7 +137,7 @@ export function EpisPage({ epis, setEpis, toast }: Props) {
         <button className="btn btn-primary" onClick={() => setAddModal(true)}>+ Novo EPI</button>
       </div>
       <div className="epi-grid">
-        {epis.map(e => {
+        {paginated.map(e => {
           const pct = Math.min(100, (e.estoque / (e.minimo * 3)) * 100);
           const low = e.estoque <= e.minimo;
           const color = low ? "var(--red)" : pct > 60 ? "var(--green)" : "var(--orange)";
@@ -162,6 +167,24 @@ export function EpisPage({ epis, setEpis, toast }: Props) {
           );
         })}
       </div>
+      {epis.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>por página:</span>
+            {[10, 25, 50].map(n => (
+              <button key={n} className={`btn btn-sm ${pageSize === n ? "btn-primary" : "btn-ghost"}`} onClick={() => { setPageSize(n); setCurrentPage(1); }}>{n}</button>
+            ))}
+            <span style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginLeft: 8 }}>{epis.length} EPI{epis.length !== 1 ? "s" : ""}</span>
+          </div>
+          {totalPages > 1 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button className="btn btn-ghost btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>← Anterior</button>
+              <span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text2)", minWidth: 70, textAlign: "center" }}>{currentPage} / {totalPages}</span>
+              <button className="btn btn-ghost btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Próxima →</button>
+            </div>
+          )}
+        </div>
+      )}
       {(editEpi || addModal) && (
         <EpiModal
           epi={editEpi || { nome: "", ca: "", cas_json: null, categoria: "Proteção da Cabeça", estoque: 0, minimo: 0, validade: "", img: "🪖", periodicidade: 90, descricao: "", norma: "", fabricante: "" }}

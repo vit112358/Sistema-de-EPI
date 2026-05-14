@@ -22,6 +22,11 @@ export function CadastroUsuariosPage({ users, setUsers, currentUser, toast }: Pr
   const [editing, setEditing] = useState<Usuario | null>(null);
   const [form, setForm] = useState<FormState>({ nome: "", username: "", senha: "", role: "operador" });
   const [confirm, setConfirm] = useState<Usuario | null>(null);
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalPages = Math.max(1, Math.ceil(users.length / pageSize));
+  const paginated  = users.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const openNew = () => { setForm({ nome: "", username: "", senha: "", role: "operador" }); setEditing(null); setModal(true); };
   const openEdit = (u: Usuario) => { setForm({ nome: u.nome, username: u.username, senha: "", role: u.role }); setEditing(u); setModal(true); };
@@ -71,7 +76,7 @@ export function CadastroUsuariosPage({ users, setUsers, currentUser, toast }: Pr
           <table>
             <thead><tr><th>Nome</th><th>Username</th><th>Perfil</th><th></th></tr></thead>
             <tbody>
-              {users.map(u => (
+              {paginated.map(u => (
                 <tr key={u.id}>
                   <td>
                     <div style={{ fontWeight: 600 }}>{u.nome}</div>
@@ -95,6 +100,24 @@ export function CadastroUsuariosPage({ users, setUsers, currentUser, toast }: Pr
           </table>
         </div>
       </div>
+      {users.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>por página:</span>
+            {[10, 25, 50].map(n => (
+              <button key={n} className={`btn btn-sm ${pageSize === n ? "btn-primary" : "btn-ghost"}`} onClick={() => { setPageSize(n); setCurrentPage(1); }}>{n}</button>
+            ))}
+            <span style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginLeft: 8 }}>{users.length} usuário{users.length !== 1 ? "s" : ""}</span>
+          </div>
+          {totalPages > 1 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button className="btn btn-ghost btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>← Anterior</button>
+              <span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text2)", minWidth: 70, textAlign: "center" }}>{currentPage} / {totalPages}</span>
+              <button className="btn btn-ghost btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Próxima →</button>
+            </div>
+          )}
+        </div>
+      )}
       {modal && (
         <div className="modal-overlay" onClick={() => setModal(false)}>
           <div className="modal" onClick={(e: React.MouseEvent) => e.stopPropagation()}>

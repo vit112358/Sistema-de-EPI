@@ -19,6 +19,7 @@ import { CadastroUsuariosPage } from "./components/CadastroUsuariosPage";
 import { RelatorioTrocaPage } from "./components/RelatorioTrocaPage";
 import { RelatoriosPage } from "./components/RelatoriosPage";
 import { EpisPorFuncionarioPage } from "./components/EpisPorFuncionarioPage";
+import { AuditLogPage } from "./components/AuditLogPage";
 
 const NAV = [
   { id: "dashboard",          icon: "⬛", label: "Dashboard",            section: "PRINCIPAL"   },
@@ -33,6 +34,7 @@ const NAV = [
   { id: "relatorio-troca",        icon: "🔄", label: "Relatório de Trocas",      section: "RELATÓRIOS"  },
   { id: "relatorios",             icon: "📊", label: "Indicadores Gerais"                            },
   { id: "epis-por-funcionario",   icon: "📄", label: "EPIs por Funcionário"                          },
+  { id: "audit-log",              icon: "🔍", label: "Auditoria"                                     },
 ] as const;
 
 type PageId = typeof NAV[number]['id'];
@@ -50,6 +52,7 @@ const TITLES: Record<PageId, [string, string]> = {
   "relatorio-troca":        ["Relatório de Trocas",      "Calendário de substituição de EPIs por colaborador"],
   "relatorios":             ["Indicadores Gerais",       "Performance e conformidade"],
   "epis-por-funcionario":   ["EPIs por Funcionário",     "Fichas de entrega consolidadas por colaborador"],
+  "audit-log":              ["Auditoria",                "Histórico de ações: assinaturas, cancelamentos e alterações"],
 };
 
 export default function App() {
@@ -300,7 +303,7 @@ export default function App() {
             {NAV
               .filter(item => {
                 if (currentUser.role === 'colaborador') return item.id === 'entregas';
-                if (currentUser.role !== 'admin') return item.id !== 'cadastro-usuarios';
+                if (currentUser.role !== 'admin') return item.id !== 'cadastro-usuarios' && item.id !== 'audit-log';
                 return true;
               })
               .map(item => (
@@ -356,6 +359,7 @@ export default function App() {
             {page === "relatorio-troca"   && <RelatorioTrocaPage epis={epis} funcionarios={funcionarios} entregas={entregas} />}
             {page === "relatorios"        && <RelatoriosPage           epis={epis} entregas={entregas} />}
             {page === "epis-por-funcionario" && <EpisPorFuncionarioPage entregas={entregas} funcionarios={funcionarios} />}
+            {page === "audit-log"            && <AuditLogPage />}
           </div>
         </div>
       </div>

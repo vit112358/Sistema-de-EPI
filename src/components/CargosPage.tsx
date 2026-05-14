@@ -14,6 +14,11 @@ export function CargosPage({ cargos, setCargos, toast }: Props) {
   const [editing, setEditing] = useState<Cargo | null>(null);
   const [nome, setNome] = useState("");
   const [confirmDel, setConfirmDel] = useState<Cargo | null>(null);
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalPages = Math.max(1, Math.ceil(cargos.length / pageSize));
+  const paginated  = cargos.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const openAdd = () => { setEditing(null); setNome(""); setModal(true); };
   const openEdit = (c: Cargo) => { setEditing(c); setNome(c.nome); setModal(true); };
@@ -56,9 +61,9 @@ export function CargosPage({ cargos, setCargos, toast }: Props) {
             <table>
               <thead><tr><th>#</th><th>Nome do Cargo</th><th style={{ width: 100 }}>Ações</th></tr></thead>
               <tbody>
-                {cargos.map((c, i) => (
+                {paginated.map((c, i) => (
                   <tr key={c.id}>
-                    <td style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text3)" }}>{String(i + 1).padStart(2, "0")}</td>
+                    <td style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text3)" }}>{String((currentPage - 1) * pageSize + i + 1).padStart(2, "0")}</td>
                     <td style={{ fontWeight: 500 }}>{c.nome}</td>
                     <td>
                       <div style={{ display: "flex", gap: 6 }}>
@@ -73,6 +78,24 @@ export function CargosPage({ cargos, setCargos, toast }: Props) {
           )}
         </div>
       </div>
+      {cargos.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>por página:</span>
+            {[10, 25, 50].map(n => (
+              <button key={n} className={`btn btn-sm ${pageSize === n ? "btn-primary" : "btn-ghost"}`} onClick={() => { setPageSize(n); setCurrentPage(1); }}>{n}</button>
+            ))}
+            <span style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginLeft: 8 }}>{cargos.length} cargo{cargos.length !== 1 ? "s" : ""}</span>
+          </div>
+          {totalPages > 1 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button className="btn btn-ghost btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>← Anterior</button>
+              <span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text2)", minWidth: 70, textAlign: "center" }}>{currentPage} / {totalPages}</span>
+              <button className="btn btn-ghost btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Próxima →</button>
+            </div>
+          )}
+        </div>
+      )}
       {modal && (
         <div className="modal-overlay" onClick={() => setModal(false)}>
           <div className="modal" onClick={(e: React.MouseEvent) => e.stopPropagation()}>

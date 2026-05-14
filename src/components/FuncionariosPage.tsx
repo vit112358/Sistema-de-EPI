@@ -61,6 +61,11 @@ export function FuncionariosPage({ funcionarios, setFuncionarios, onAddFuncionar
   const [addModal, setAddModal] = useState(false);
   const [editFunc, setEditFunc] = useState<Funcionario | null>(null);
   const [confirmDel, setConfirmDel] = useState<Funcionario | null>(null);
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalPages = Math.max(1, Math.ceil(funcionarios.length / pageSize));
+  const paginated  = funcionarios.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const saveFunc = async (f: Funcionario) => {
     if (!f.nome.trim() || !f.matricula.trim() || !f.email.trim() || !f.telefone.trim()) {
@@ -102,27 +107,76 @@ export function FuncionariosPage({ funcionarios, setFuncionarios, onAddFuncionar
         </div>
         <button className="btn btn-primary" onClick={() => setAddModal(true)}>+ Novo Funcionário</button>
       </div>
-      <div className="func-grid">
-        {funcionarios.map(f => (
-          <div key={f.id} className="func-card">
-            <div className="func-avatar">{f.nome[0]}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="func-name">{f.nome}</div>
-              <div className="func-info">{f.matricula} · {f.setor}</div>
-              <div className="func-info">{f.cargo}</div>
-              <div className="func-tags">
-                {f.biometrias.length > 0
-                  ? <span className="badge badge-green">👆 {f.biometrias.length} biometria{f.biometrias.length > 1 ? "s" : ""}</span>
-                  : <span className="badge badge-orange">⚠ Sem biometria</span>}
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 6, flexShrink: 0, alignSelf: "flex-start" }}>
-              <button className="btn btn-ghost btn-xs" onClick={() => setEditFunc(f)}>✏️ Editar</button>
-              <button className="btn btn-danger btn-xs" onClick={() => setConfirmDel(f)}>🗑</button>
-            </div>
-          </div>
-        ))}
+      <div className="card">
+        <div className="card-body">
+          {funcionarios.length === 0 ? (
+            <div className="empty-state"><div className="empty-icon">👷</div>Nenhum funcionário cadastrado</div>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Funcionário</th>
+                  <th>Matrícula</th>
+                  <th>Setor</th>
+                  <th>Cargo</th>
+                  <th>Biometria</th>
+                  <th style={{ width: 120 }}>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginated.map((f, i) => (
+                  <tr key={f.id}>
+                    <td style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text3)" }}>
+                      {String((currentPage - 1) * pageSize + i + 1).padStart(2, "0")}
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 30, height: 30, borderRadius: "50%", background: "var(--orange)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, color: "#fff", flexShrink: 0 }}>
+                          {f.nome[0]}
+                        </div>
+                        <span style={{ fontWeight: 600 }}>{f.nome}</span>
+                      </div>
+                    </td>
+                    <td style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text3)" }}>{f.matricula}</td>
+                    <td>{f.setor}</td>
+                    <td>{f.cargo}</td>
+                    <td>
+                      {f.biometrias.length > 0
+                        ? <span className="badge badge-green">👆 {f.biometrias.length} biometria{f.biometrias.length > 1 ? "s" : ""}</span>
+                        : <span className="badge badge-orange">⚠ Sem biometria</span>}
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button className="btn btn-ghost btn-xs" onClick={() => setEditFunc(f)}>✏️ Editar</button>
+                        <button className="btn btn-danger btn-xs" onClick={() => setConfirmDel(f)}>🗑</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
+      {funcionarios.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>por página:</span>
+            {[10, 25, 50].map(n => (
+              <button key={n} className={`btn btn-sm ${pageSize === n ? "btn-primary" : "btn-ghost"}`} onClick={() => { setPageSize(n); setCurrentPage(1); }}>{n}</button>
+            ))}
+            <span style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginLeft: 8 }}>{funcionarios.length} funcionário{funcionarios.length !== 1 ? "s" : ""}</span>
+          </div>
+          {totalPages > 1 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button className="btn btn-ghost btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>← Anterior</button>
+              <span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text2)", minWidth: 70, textAlign: "center" }}>{currentPage} / {totalPages}</span>
+              <button className="btn btn-ghost btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Próxima →</button>
+            </div>
+          )}
+        </div>
+      )}
       {(editFunc || addModal) && (
         <FuncModal
           func={editFunc || { nome: "", matricula: "", setor: "Produção", cargo: "", email: "", telefone: "", admissao: "", biometrias: [] }}

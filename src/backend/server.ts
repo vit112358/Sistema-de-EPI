@@ -3,7 +3,7 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, buscarImagemBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha, bloqueadoPorRateLimit, registrarFalhaLogin, limparTentativasLogin} from './crud.ts';
+import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, buscarImagemBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha, bloqueadoPorRateLimit, registrarFalhaLogin, limparTentativasLogin, registrarAuditoria, listarAuditLog} from './crud.ts';
 
 const app = express();
 const PORT = 3000;
@@ -115,6 +115,62 @@ const soAdmin = (req: express.Request, res: express.Response, next: express.Next
     next();
 };
 
+// ─── Helpers de validação ────────────────────────────────────────────────────
+
+const ROLES_VALIDOS = ['admin', 'operador', 'colaborador'];
+const STATUS_VALIDOS = ['pendente_assinatura', 'assinado', 'cancelado'];
+
+function validarEntregaPost(b: any): string | null {
+    if (!Number.isInteger(b.funcionario_id)) return 'funcionario_id deve ser um inteiro';
+    if (!b.funcionario?.trim()) return 'funcionario é obrigatório';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(b.data ?? '')) return 'data inválida (esperado YYYY-MM-DD)';
+    if (!Array.isArray(b.itens) || b.itens.length === 0) return 'itens deve ser um array não vazio';
+    return null;
+}
+
+function validarEntregaPut(b: any): string | null {
+    if (b.status !== undefined && !STATUS_VALIDOS.includes(b.status)) return `status inválido; valores aceitos: ${STATUS_VALIDOS.join(', ')}`;
+    return null;
+}
+
+function validarFuncionario(b: any): string | null {
+    if (!b.nome?.trim()) return 'nome é obrigatório';
+    if (!b.matricula?.trim()) return 'matrícula é obrigatória';
+    if (!b.setor?.trim()) return 'setor é obrigatório';
+    if (!b.cargo?.trim()) return 'cargo é obrigatório';
+    if (!b.email?.trim()) return 'email é obrigatório';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.email)) return 'email inválido';
+    if (!b.telefone?.trim()) return 'telefone é obrigatório';
+    return null;
+}
+
+function validarEpi(b: any): string | null {
+    if (!b.nome?.trim()) return 'nome é obrigatório';
+    if (typeof b.estoque !== 'number' || b.estoque < 0) return 'estoque deve ser um número >= 0';
+    if (typeof b.minimo !== 'number' || b.minimo < 0) return 'minimo deve ser um número >= 0';
+    return null;
+}
+
+function validarUsuarioPost(b: any): string | null {
+    if (!b.nome?.trim()) return 'nome é obrigatório';
+    if (!b.username?.trim()) return 'username é obrigatório';
+    if (!b.senha?.trim()) return 'senha é obrigatória';
+    if (!ROLES_VALIDOS.includes(b.role)) return `role inválido; valores aceitos: ${ROLES_VALIDOS.join(', ')}`;
+    return null;
+}
+
+function validarUsuarioPut(b: any): string | null {
+    if (b.nome !== undefined && !String(b.nome).trim()) return 'nome não pode ser vazio';
+    if (b.username !== undefined && !String(b.username).trim()) return 'username não pode ser vazio';
+    if (b.role !== undefined && !ROLES_VALIDOS.includes(b.role)) return `role inválido; valores aceitos: ${ROLES_VALIDOS.join(', ')}`;
+    return null;
+}
+
+function actor(req: express.Request): { id: number; username: string } {
+    const u = (req as any).usuario ?? {};
+    return { id: u.id ?? null, username: u.username ?? 'desconhecido' };
+}
+
 // ─── Entregas ─────────────────────────────────────────────────────────────────
 
 app.get('/api/entregas', async (_req, res) => {
@@ -128,9 +184,15 @@ app.get('/api/entregas', async (_req, res) => {
 });
 
 app.post('/api/entregas', async (req, res) => {
+    const err = validarEntregaPost(req.body);
+    if (err) return res.status(400).json({ error: err });
     try {
         const novaEntrega = req.body;
         const id = await criarEntrega(novaEntrega);
+        const a = actor(req);
+        registrarAuditoria('entrega_criada', 'entrega', id,
+            `Para: ${novaEntrega.funcionario} · ${novaEntrega.itens.length} item(ns)`,
+            a.id, a.username);
         res.status(201).json({ id, ...novaEntrega });
     } catch (error) {
         console.error('Erro ao criar entregas:', error);
@@ -139,9 +201,17 @@ app.post('/api/entregas', async (req, res) => {
 });
 
 app.put('/api/entregas/:id', async (req, res) => {
+    const err = validarEntregaPut(req.body);
+    if (err) return res.status(400).json({ error: err });
     try {
         const id = parseInt(req.params.id);
         await atualizarStatusEntrega(id, req.body);
+        const a = actor(req);
+        if (req.body.status === 'assinado')
+            registrarAuditoria('entrega_assinada', 'entrega', id,
+                `Tipo: ${req.body.tipo_assinatura ?? '—'}`, a.id, a.username);
+        else if (req.body.status === 'cancelado')
+            registrarAuditoria('entrega_cancelada', 'entrega', id, null, a.id, a.username);
         res.json({ success: true });
     } catch (error) {
         console.error('Erro ao atualizar entrega:', error);
@@ -162,9 +232,14 @@ app.get('/api/funcionarios', async (_req, res) => {
 });
 
 app.post('/api/funcionarios', async (req, res) => {
+    const err = validarFuncionario(req.body);
+    if (err) return res.status(400).json({ error: err });
     try {
         const novoFuncionario = req.body;
         const id = await criarFuncionario(novoFuncionario);
+        const a = actor(req);
+        registrarAuditoria('funcionario_criado', 'funcionario', id,
+            novoFuncionario.nome, a.id, a.username);
         res.status(201).json({ id, ...novoFuncionario, biometrias: [] });
     } catch (error: any) {
         console.error('Erro ao criar funcionário:', error);
@@ -180,9 +255,14 @@ app.post('/api/funcionarios', async (req, res) => {
 });
 
 app.put('/api/funcionarios/:id', async (req, res) => {
+    const err = validarFuncionario(req.body);
+    if (err) return res.status(400).json({ error: err });
     try {
         const id = parseInt(req.params.id);
         await atualizarFuncionario(id, req.body);
+        const a = actor(req);
+        registrarAuditoria('funcionario_atualizado', 'funcionario', id,
+            req.body.nome ?? null, a.id, a.username);
         res.json({ success: true });
     } catch (error) {
         console.error('Erro ao atualizar funcionário:', error);
@@ -194,6 +274,8 @@ app.delete('/api/funcionarios/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id);
         await deletarFuncionario(id);
+        const a = actor(req);
+        registrarAuditoria('funcionario_deletado', 'funcionario', id, null, a.id, a.username);
         res.json({ success: true });
     } catch (error) {
         console.error('Erro ao deletar funcionário:', error);
@@ -214,8 +296,12 @@ app.get('/api/epis', async (_req, res) => {
 });
 
 app.post('/api/epis', async (req, res) => {
+    const err = validarEpi(req.body);
+    if (err) return res.status(400).json({ error: err });
     try {
         const id = await criarEpi(req.body);
+        const a = actor(req);
+        registrarAuditoria('epi_criado', 'epi', id, req.body.nome, a.id, a.username);
         res.status(201).json({ id, ...req.body });
     } catch (error) {
         console.error('Erro ao criar EPI:', error);
@@ -224,9 +310,13 @@ app.post('/api/epis', async (req, res) => {
 });
 
 app.put('/api/epis/:id', async (req, res) => {
+    const err = validarEpi(req.body);
+    if (err) return res.status(400).json({ error: err });
     try {
         const id = parseInt(req.params.id);
         await atualizarEpi(id, req.body);
+        const a = actor(req);
+        registrarAuditoria('epi_atualizado', 'epi', id, req.body.nome ?? null, a.id, a.username);
         res.json({ success: true });
     } catch (error) {
         console.error('Erro ao atualizar EPI:', error);
@@ -238,6 +328,8 @@ app.delete('/api/epis/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id);
         await deletarEpi(id);
+        const a = actor(req);
+        registrarAuditoria('epi_deletado', 'epi', id, null, a.id, a.username);
         res.json({ success: true });
     } catch (error) {
         console.error('Erro ao deletar EPI:', error);
@@ -309,7 +401,7 @@ app.delete('/api/biometrias/:id', async (req, res) => {
 
 // ─── Usuários ─────────────────────────────────────────────────────────────────
 
-app.get('/api/users', async (_req, res) => {
+app.get('/api/users', soAdmin, async (_req, res) => {
     try {
         const users = await listarUsuarios();
         res.json(users.map(({ senha: _s, ...u }) => u));
@@ -317,23 +409,44 @@ app.get('/api/users', async (_req, res) => {
 });
 
 app.post('/api/users', soAdmin, async (req, res) => {
+    const err = validarUsuarioPost(req.body);
+    if (err) return res.status(400).json({ error: err });
     try {
         const id = await criarUsuario(req.body);
         const { senha: _s, ...semSenha } = req.body;
+        const a = actor(req);
+        registrarAuditoria('usuario_criado', 'usuario', id,
+            `${req.body.username} (${req.body.role})`, a.id, a.username);
         res.status(201).json({ id, ...semSenha });
     } catch { res.status(500).json({ error: 'Erro ao criar usuário' }); }
 });
 
 app.put('/api/users/:id', soAdmin, async (req, res) => {
+    const err = validarUsuarioPut(req.body);
+    if (err) return res.status(400).json({ error: err });
     try {
-        await atualizarUsuario(Number.parseInt(req.params.id as string), req.body);
+        const id = Number.parseInt(req.params.id as string);
+        await atualizarUsuario(id, req.body);
+        const a = actor(req);
+        registrarAuditoria('usuario_atualizado', 'usuario', id,
+            req.body.username ?? null, a.id, a.username);
         res.json({ success: true });
     } catch { res.status(500).json({ error: 'Erro ao atualizar usuário' }); }
 });
 
 app.delete('/api/users/:id', soAdmin, async (req, res) => {
     try {
-        await deletarUsuario(Number.parseInt(req.params.id as string));
+        const id = Number.parseInt(req.params.id as string);
+        await deletarUsuario(id);
+        const a = actor(req);
+        registrarAuditoria('usuario_deletado', 'usuario', id, null, a.id, a.username);
         res.json({ success: true });
     } catch { res.status(500).json({ error: 'Erro ao deletar usuário' }); }
+});
+
+// ─── Auditoria ────────────────────────────────────────────────────────────────
+
+app.get('/api/audit-log', soAdmin, async (_req, res) => {
+    try { res.json(await listarAuditLog()); }
+    catch { res.status(500).json({ error: 'Erro ao buscar log de auditoria' }); }
 });

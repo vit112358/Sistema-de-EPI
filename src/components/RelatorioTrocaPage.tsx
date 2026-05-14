@@ -21,6 +21,8 @@ interface TrocaItem {
 export function RelatorioTrocaPage({ epis, funcionarios, entregas }: Props) {
   const [filtroUrgencia, setFiltroUrgencia] = useState("todos");
   const [filtroFunc, setFiltroFunc] = useState("todos");
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const trocas: TrocaItem[] = [];
   entregas.filter(e => e.status === "assinado").forEach(entrega => {
@@ -48,6 +50,9 @@ export function RelatorioTrocaPage({ epis, funcionarios, entregas }: Props) {
     if (filtroFunc !== "todos" && t.func.id !== +filtroFunc) return false;
     return true;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtrados.length / pageSize));
+  const paginados  = filtrados.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const counts = {
     atrasado: trocas.filter(t => t.urgencia === "atrasado").length,
@@ -91,7 +96,7 @@ export function RelatorioTrocaPage({ epis, funcionarios, entregas }: Props) {
             key={s.key}
             className={`stat-card ${s.color}`}
             style={{ cursor: "pointer", outline: filtroUrgencia === s.key ? "2px solid var(--orange)" : "none" }}
-            onClick={() => setFiltroUrgencia(filtroUrgencia === s.key ? "todos" : s.key)}
+            onClick={() => { setFiltroUrgencia(filtroUrgencia === s.key ? "todos" : s.key); setCurrentPage(1); }}
           >
             <div className="stat-icon">{s.icon}</div>
             <div className="stat-value">{s.value}</div>
@@ -105,11 +110,11 @@ export function RelatorioTrocaPage({ epis, funcionarios, entregas }: Props) {
           <span className="card-title">🔄 Calendário de Trocas de EPI</span>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={exportarExcel}>⬇️ Exportar Excel</button>
-            <select className="input" style={{ width: "auto", padding: "5px 10px", fontSize: 12 }} value={filtroFunc} onChange={e => setFiltroFunc(e.target.value)}>
+            <select className="input" style={{ width: "auto", padding: "5px 10px", fontSize: 12 }} value={filtroFunc} onChange={e => { setFiltroFunc(e.target.value); setCurrentPage(1); }}>
               <option value="todos">Todos funcionários</option>
               {funcionarios.map(f => <option key={f.id} value={f.id}>{f.nome.split(" ")[0]} {f.nome.split(" ")[1]}</option>)}
             </select>
-            <select className="input" style={{ width: "auto", padding: "5px 10px", fontSize: 12 }} value={filtroUrgencia} onChange={e => setFiltroUrgencia(e.target.value)}>
+            <select className="input" style={{ width: "auto", padding: "5px 10px", fontSize: 12 }} value={filtroUrgencia} onChange={e => { setFiltroUrgencia(e.target.value); setCurrentPage(1); }}>
               <option value="todos">Todos status</option>
               <option value="atrasado">🔴 Atrasados</option>
               <option value="critico">🟠 Críticos</option>
@@ -127,7 +132,7 @@ export function RelatorioTrocaPage({ epis, funcionarios, entregas }: Props) {
                 <tr><th>Funcionário</th><th>EPI</th><th>Periodicidade</th><th>Última Entrega</th><th>Próxima Troca</th><th>Dias Restantes</th><th>Status</th></tr>
               </thead>
               <tbody>
-                {filtrados.map((t, i) => (
+                {paginados.map((t, i) => (
                   <tr key={i}>
                     <td>
                       <div style={{ fontWeight: 600 }}>{t.func.nome.split(" ").slice(0, 2).join(" ")}</div>
@@ -159,6 +164,24 @@ export function RelatorioTrocaPage({ epis, funcionarios, entregas }: Props) {
             </table>
           )}
         </div>
+        {filtrados.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, padding: "12px 16px", borderTop: "1px solid var(--border)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono" }}>por página:</span>
+              {[10, 25, 50].map(n => (
+                <button key={n} className={`btn btn-sm ${pageSize === n ? "btn-primary" : "btn-ghost"}`} onClick={() => { setPageSize(n); setCurrentPage(1); }}>{n}</button>
+              ))}
+              <span style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginLeft: 8 }}>{filtrados.length} registro{filtrados.length !== 1 ? "s" : ""}</span>
+            </div>
+            {totalPages > 1 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button className="btn btn-ghost btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>← Anterior</button>
+                <span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "var(--text2)", minWidth: 70, textAlign: "center" }}>{currentPage} / {totalPages}</span>
+                <button className="btn btn-ghost btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Próxima →</button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -489,3 +489,30 @@ export function deletarBiometria(id: number): Promise<void> {
         });
     });
 }
+
+// ── AUDITORIA ────────────────────────────────────────────────────────────────
+
+export function registrarAuditoria(
+    acao: string,
+    entidade: string | null,
+    entidade_id: number | null,
+    detalhe: string | null,
+    usuario_id: number | null,
+    usuario: string,
+): void {
+    db.run(
+        `INSERT INTO audit_log (acao, entidade, entidade_id, detalhe, usuario_id, usuario) VALUES (?, ?, ?, ?, ?, ?)`,
+        [acao, entidade, entidade_id, detalhe, usuario_id, usuario],
+        (err) => { if (err) console.error('Erro ao registrar auditoria:', err.message); },
+    );
+}
+
+export function listarAuditLog(limit = 1000): Promise<any[]> {
+    return new Promise((resolve, reject) => {
+        db.all(
+            `SELECT * FROM audit_log ORDER BY id DESC LIMIT ?`,
+            [limit],
+            (err, rows: any[]) => { if (err) reject(err); else resolve(rows); },
+        );
+    });
+}
