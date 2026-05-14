@@ -28,7 +28,7 @@ export function RelatorioTrocaPage({ epis, funcionarios, entregas }: Props) {
     if (!func) return;
     entrega.itens.forEach(item => {
       const epi = epis.find(e => e.id === item.epi_id);
-      if (!epi || !epi.periodicidade) return;
+      if (!epi?.periodicidade) return;
       const dataTroca = addDays(entrega.data, epi.periodicidade);
       const dias = daysUntil(dataTroca);
       trocas.push({

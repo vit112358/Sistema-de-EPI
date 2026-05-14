@@ -53,6 +53,7 @@ const TITLES: Record<PageId, [string, string]> = {
 };
 
 export default function App() {
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') !== 'light');
   const [showLanding, setShowLanding] = useState(true);
   const [users, setUsers] = useState<Usuario[]>([]);
   const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
@@ -75,6 +76,11 @@ export default function App() {
   entregasRef.current    = entregas;
   funcionariosRef.current = funcionarios;
   episRef.current        = epis;
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('light-mode', !darkMode);
+    localStorage.setItem('theme', darkMode ? 'dark' : 'light');
+  }, [darkMode]);
 
   useEffect(() => {
     onUnauthorized(() => {
@@ -321,6 +327,9 @@ export default function App() {
             <button className="menu-btn" onClick={() => setSidebarOpen(o => !o)}>☰</button>
             <div><div className="topbar-title">{title}</div><div className="topbar-sub">{sub}</div></div>
             <div className="topbar-right">
+              <button className="btn btn-ghost btn-sm" onClick={() => setDarkMode(d => !d)} title={darkMode ? "Modo claro" : "Modo escuro"}>
+                {darkMode ? "☀️" : "🌙"}
+              </button>
               {(stockAlerts > 0 || pendentes > 0) && (
                 <div className="alert alert-warning" style={{ padding: "6px 12px", margin: 0, fontSize: 12 }}>
                   ⚠️ {stockAlerts + pendentes} alerta{(stockAlerts + pendentes) !== 1 ? "s" : ""}

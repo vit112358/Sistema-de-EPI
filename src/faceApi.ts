@@ -26,11 +26,25 @@ function toImgElement(base64: string): Promise<HTMLImageElement> {
   });
 }
 
+// Aplica brightness/contrast para compensar contraluz e câmeras ruins
+function preprocessToCanvas(source: HTMLVideoElement | HTMLImageElement): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  const w = source instanceof HTMLVideoElement ? source.videoWidth  : source.naturalWidth;
+  const h = source instanceof HTMLVideoElement ? source.videoHeight : source.naturalHeight;
+  canvas.width  = w || 640;
+  canvas.height = h || 480;
+  const ctx = canvas.getContext('2d')!;
+  ctx.filter = 'brightness(1.5) contrast(1.3)';
+  ctx.drawImage(source, 0, 0);
+  return canvas;
+}
+
 export async function extractDescriptor(base64: string): Promise<Float32Array | null> {
   await loadFaceModels();
   const img = await toImgElement(base64);
+  const canvas = preprocessToCanvas(img);
   const result = await faceapi
-    .detectSingleFace(img, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+    .detectSingleFace(canvas, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
     .withFaceLandmarks()
     .withFaceDescriptor();
   return result?.descriptor ?? null;
@@ -53,8 +67,9 @@ function ptDist(a: faceapi.Point, b: faceapi.Point): number {
 
 export async function detectLandmarks(video: HTMLVideoElement): Promise<faceapi.FaceLandmarks68 | null> {
   await loadFaceModels();
+  const canvas = preprocessToCanvas(video);
   const result = await faceapi
-    .detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+    .detectSingleFace(canvas, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
     .withFaceLandmarks();
   return result?.landmarks ?? null;
 }

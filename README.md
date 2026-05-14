@@ -244,3 +244,333 @@ setFuncionarios e o toast agora ficam dentro do try, após confirmação de res.
 
 #7 — Rate limiter zerado no restart (database.ts + crud.ts + server.ts)
 Tabela login_attempts no SQLite registra IP e timestamp de cada falha. O login handler consulta (bloqueadoPorRateLimit), registra falhas (registrarFalhaLogin) e limpa no sucesso (limparTentativasLogin). Persiste entre restarts do PM2/deploy.
+
+● Cenário 1 — Instância por empresa (agora, até ~15)
+
+Estrutura no servidor:                                                                                                                                                                                                                                                                                      
+/opt/epi/
+empresa-abc/                                                                                                                                                                                                                                                                                              
+server.ts (ou build/)
+bd_epi.sqlite
+.env          ← PORT=3001
+empresa-xyz/
+server.ts
+bd_epi.sqlite
+.env          ← PORT=3002
+
+Passo a passo:
+
+1. Instalar dependências no servidor (uma vez)
+   sudo apt install nodejs npm nginx
+   npm install -g pm2 ts-node
+
+2. Para cada nova empresa
+# Clonar e configurar
+cp -r /opt/epi/template /opt/epi/empresa-abc
+cd /opt/epi/empresa-abc
+echo "PORT=3001" > .env
+echo "JWT_SECRET=segredo-unico-abc" >> .env
+
+# Inicializar banco
+npx ts-node src/backend/database.ts
+
+# Iniciar processo
+pm2 start "npx ts-node src/backend/server.ts" --name empresa-abc
+pm2 save
+
+3. Nginx — bloco por empresa
+   server {
+   server_name empresa-abc.seudominio.com;
+   location / { proxy_pass http://localhost:3001; }
+   }
+   server {
+   server_name empresa-xyz.seudominio.com;
+   location / { proxy_pass http://localhost:3002; }
+   }
+
+4. SSL (uma vez por domínio)
+   sudo certbot --nginx -d empresa-abc.seudominio.com
+
+5. Deploy de atualização
+   cd /opt/epi/empresa-abc && git pull
+   pm2 restart empresa-abc
+
+  ---
+Cenário 2 — Multi-tenant (aos 15 empresas)
+
+Estrutura:
+/opt/epi/
+app/           ← uma só cópia do código
+data/
+empresa-abc/bd.sqlite
+empresa-xyz/bd.sqlite
+
+Passo a passo de migração:
+
+1. Mover bancos existentes
+   mkdir -p /opt/epi/data/empresa-abc
+   mv /opt/epi/empresa-abc/bd_epi.sqlite /opt/epi/data/empresa-abc/bd.sqlite
+# repetir para cada empresa
+
+2. Adaptar server.ts com o middleware de tenant (o que discutimos — JWT valida slug)
+3. Um único processo
+   cd /opt/epi/app
+   pm2 delete empresa-abc empresa-xyz  # matar os N processos
+   pm2 start "npx ts-node src/backend/server.ts" --name epi-app
+   pm2 save
+
+4. Nginx — um bloco só com wildcard
+   server {
+   server_name *.seudominio.com;
+   location / { proxy_pass http://localhost:3000; }
+   }
+
+5. Provisionar nova empresa
+# script: novo-cliente.sh <slug>
+mkdir -p /opt/epi/dataCIFRAO1
+ 
+npx ts-node src/backend/database.ts --tenant $1
+# criar usuário admin no banco
+
+  ---
+Quando migrar: ao chegar em ~10 empresas já vale planejar a migração — o trabalho maior é adaptar server.ts e database.ts pra receber o tenant como parâmetro. Os bancos SQLite migram sem conversão.
+
+
+● Instância por empresa
+
+Prós
+- Zero risco de vazamento entre tenants — processos completamente isolados
+- Falha de uma empresa não afeta as outras
+- Rollback por empresa: dá pra manter versões diferentes por cliente
+- Deploy/atualização granular
+- Debug simples: pm2 logs empresa-abc
+- Sem mudança no código atual
+
+Contras
+- RAM cresce linear: ~150-200MB por instância → teto real de ~5 empresas em 1GB
+- Atualizar 10 empresas = rodar o deploy 10 vezes
+- Sem painel centralizado de uso/saúde (a menos que configure no PM2)
+- Custo de servidor sobe antes do que no multi-tenant
+
+  ---
+Multi-tenant
+
+Prós
+- Um processo só: 15-20 empresas no mesmo 1GB confortavelmente
+- Deploy único atualiza todos os clientes
+- Mais fácil monitorar e logar em um lugar
+- Escala sem trocar de servidor tão cedo
+
+Contras
+- Bug no código derruba todos os clientes ao mesmo tempo
+- Exige mudança no server.ts, database.ts e no JWT
+- Path traversal e cross-tenant são riscos reais que precisam de teste
+- Rollback por cliente deixa de existir — ou você reverte todos ou nenhum
+- Mais complexo pra debugar ("qual tenant causou isso?")
+
+  ---
+Resumo prático
+
+![img.png](img.png)
+
+
+ ---                                                                                                                                                                                                                                                                                                         
+Setup (uma vez)
+
+npm install -D vitest supertest @types/supertest
+
+Em package.json:
+"scripts": {
+"test": "vitest run",
+"test:watch": "vitest"
+}
+
+  ---
+1. Path traversal — teste de unidade
+
+Testa só a função de validação do slug, sem subir servidor.
+
+// src/backend/slug.ts
+export function slugValido(slug: string): boolean {
+return /^[a-z0-9-]+$/.test(slug)
+}
+
+// src/backend/slug.test.ts
+import { describe, it, expect } from 'vitest'
+import { slugValido } from './slug'
+
+describe('slugValido', () => {
+it('aceita slugs normais', () => {
+expect(slugValido('empresa-abc')).toBe(true)
+expect(slugValido('cliente123')).toBe(true)
+})
+
+    it('rejeita path traversal', () => {
+      expect(slugValido('../../etc/passwd')).toBe(false)
+      expect(slugValido('../empresa-xyz')).toBe(false)
+      expect(slugValido('empresa/abc')).toBe(false)
+    })
+
+    it('rejeita caracteres especiais', () => {
+      expect(slugValido('empresa abc')).toBe(false)
+      expect(slugValido('empresa_abc')).toBe(false)
+      expect(slugValido('EMPRESA')).toBe(false)
+    })
+})
+
+  ---
+2. Cross-tenant — teste de integração
+
+Sobe o servidor de verdade e faz requisições HTTP.
+
+// src/backend/server.test.ts
+import { describe, it, expect } from 'vitest'
+import request from 'supertest'
+import jwt from 'jsonwebtoken'
+import app from './server' // server.ts precisa exportar o app
+
+const SECRET = process.env.JWT_SECRET ?? 'test-secret'
+
+function gerarToken(tenant: string) {
+return jwt.sign({ userId: 1, tenant }, SECRET, { expiresIn: '1h' })
+}
+
+describe('Isolamento entre tenants', () => {
+it('rejeita acesso sem token', async () => {
+const res = await request(app).get('/empresa-abc/api/funcionarios')
+expect(res.status).toBe(401)
+})
+
+    it('rejeita token de outro tenant', async () => {
+      const token = gerarToken('empresa-xyz') // token de xyz...
+      const res = await request(app)
+        .get('/empresa-abc/api/funcionarios') // ...tentando acessar abc
+        .set('Authorization', `Bearer ${token}`)
+
+      expect(res.status).toBe(403)
+    })
+
+    it('permite acesso ao tenant correto', async () => {
+      const token = gerarToken('empresa-abc')
+      const res = await request(app)
+        .get('/empresa-abc/api/funcionarios')
+        .set('Authorization', `Bearer ${token}`)
+
+      expect(res.status).toBe(200)
+    })
+
+    it('rejeita slug com path traversal', async () => {
+      const token = gerarToken('../../etc')
+      const res = await request(app)
+        .get('/../../etc/api/funcionarios')
+        .set('Authorization', `Bearer ${token}`)
+
+      expect(res.status).toBe(400)
+    })
+})
+
+  ---
+Para o server.ts exportar o app
+
+// no final de server.ts, trocar:
+app.listen(3000)
+
+// por:
+if (require.main === module) {
+app.listen(3000)
+}
+export default app
+
+  ---
+Rodar
+
+npm test              # roda uma vez
+npm run test:watch    # modo watch durante desenvolvimento
+
+
+O equivalente moderno para React é Playwright. Testa o app de verdade no browser, simulando o usuário.
+   
+---                                                                                                                                                                                                                                                                                                         
+Setup
+
+npm install -D @playwright/test
+npx playwright install chromium
+
+playwright.config.ts:
+import { defineConfig } from '@playwright/test'
+
+export default defineConfig({
+testDir: './e2e',
+baseURL: 'http://localhost:5173',
+webServer: {
+command: 'npm run dev',
+port: 5173,
+reuseExistingServer: true,
+},
+})
+
+  ---
+Testes E2E para este app
+
+// e2e/login.spec.ts
+import { test, expect } from '@playwright/test'
+
+test('login com credenciais válidas', async ({ page }) => {
+await page.goto('/')
+await page.fill('[name=usuario]', 'admin')
+await page.fill('[name=senha]', '123456')
+await page.click('button[type=submit]')
+
+    await expect(page.locator('text=Dashboard')).toBeVisible()
+})
+
+test('login inválido mostra erro', async ({ page }) => {
+await page.goto('/')
+await page.fill('[name=usuario]', 'errado')
+await page.fill('[name=senha]', 'errado')
+await page.click('button[type=submit]')
+
+    await expect(page.locator('text=Credenciais inválidas')).toBeVisible()
+})
+
+// e2e/entrega.spec.ts
+import { test, expect } from '@playwright/test'
+
+test.beforeEach(async ({ page }) => {
+// login antes de cada teste
+await page.goto('/')
+await page.fill('[name=usuario]', 'admin')
+await page.fill('[name=senha]', '123456')
+await page.click('button[type=submit]')
+})
+
+test('criar nova entrega', async ({ page }) => {
+await page.click('text=Nova Entrega')
+await page.selectOption('[name=funcionario]', { index: 1 })
+await page.click('text=Adicionar EPI')
+await page.click('text=Confirmar Entrega')
+
+    await expect(page.locator('text=Entrega criada')).toBeVisible()
+})
+
+test('logout redireciona para login', async ({ page }) => {
+await page.click('text=Sair')
+await expect(page).toHaveURL('/')
+await expect(page.locator('[name=usuario]')).toBeVisible()
+})
+
+  ---
+Rodar
+
+npx playwright test              # headless
+npx playwright test --headed     # abre o browser pra ver
+npx playwright test --ui         # interface visual (ótima pra debugar)
+
+  ---
+Diferença entre os três tipos
+
+- headless: roda em background, sem abrir o browser
+- headed: abre o browser pra ver o teste sendo executado
+- ui: abre uma interface visual pra debugar o teste
+
+![img_1.png](img_1.png)

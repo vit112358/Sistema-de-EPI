@@ -3,7 +3,7 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha, bloqueadoPorRateLimit, registrarFalhaLogin, limparTentativasLogin} from './crud.ts';
+import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, buscarImagemBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha, bloqueadoPorRateLimit, registrarFalhaLogin, limparTentativasLogin} from './crud.ts';
 
 const app = express();
 const PORT = 3000;
@@ -28,7 +28,7 @@ app.use(express.json({ limit: '2mb' }));
 // ─── Login (rota pública) ─────────────────────────────────────────────────────
 
 const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
+    windowMs: 3 * 60 * 1000,
     limit: 5,
     message: { error: 'Muitas tentativas. Tente novamente em 15 minutos.' },
     standardHeaders: true,
@@ -258,6 +258,15 @@ app.post('/api/biometrias', async (req, res) => {
     } catch (error) {
         console.error('Erro ao salvar biometria:', error);
         res.status(500).json({ error: 'Erro ao salvar biometria' });
+    }
+});
+
+app.get('/api/biometrias/:id/imagem', async (req, res) => {
+    try {
+        const imagem = await buscarImagemBiometria(parseInt(req.params.id));
+        res.json({ imagem_base64: imagem });
+    } catch {
+        res.status(500).json({ error: 'Erro ao buscar imagem' });
     }
 });
 

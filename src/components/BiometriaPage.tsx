@@ -4,10 +4,10 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { extractDescriptor, descriptorToJson, detectLandmarks, computeEAR } from "../faceApi";
 import { apiFetch } from "../api";
 
-const LIVENESS_TIMEOUT = 15;
+const LIVENESS_TIMEOUT = 20;
 const PEAK_WINDOW      = 15;
-const CLOSED_RATIO     = 0.82;
-const OPEN_RATIO       = 0.84;
+const CLOSED_RATIO     = 0.88;
+const OPEN_RATIO       = 0.90;
 
 function CameraCapture({ onCapture, onCancel }: { onCapture: (base64: string) => void; onCancel: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -74,14 +74,16 @@ export function LivenessCapture({ onCapture, onCancel }: { onCapture: (b: string
   const streamRef   = useRef<MediaStream | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
-  const earHistory  = useRef<number[]>([]);
-  const eyesClosed  = useRef(false);
+  const earHistory   = useRef<number[]>([]);
+  const eyesClosed   = useRef(false);
+  const noFaceFrames = useRef(0);
 
   type Stage = "loading" | "challenge" | "blink" | "success" | "timeout" | "error";
   const [stage, setStage]        = useState<Stage>("loading");
   const [timeLeft, setTimeLeft]  = useState(LIVENESS_TIMEOUT);
   const [faceFound, setFaceFound] = useState(false);
   const [dropPct, setDropPct]    = useState<number | null>(null);
+  const [showHint, setShowHint]  = useState(false);
 
   const stopIntervals = () => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
@@ -100,10 +102,12 @@ export function LivenessCapture({ onCapture, onCancel }: { onCapture: (b: string
   };
 
   const startAnalysis = () => {
-    earHistory.current = [];
-    eyesClosed.current = false;
+    earHistory.current   = [];
+    eyesClosed.current   = false;
+    noFaceFrames.current = 0;
     setDropPct(null);
     setFaceFound(false);
+    setShowHint(false);
     setStage("challenge");
 
     let remaining = LIVENESS_TIMEOUT;
@@ -120,7 +124,15 @@ export function LivenessCapture({ onCapture, onCancel }: { onCapture: (b: string
       if (!v || v.readyState < 2) return;
       try {
         const lm = await detectLandmarks(v);
-        if (!lm) { setFaceFound(false); return; }
+        if (!lm) {
+          setFaceFound(false);
+          noFaceFrames.current++;
+          // ~3 s sem rosto (80 ms × 37 ≈ 3 s)
+          if (noFaceFrames.current === 37) setShowHint(true);
+          return;
+        }
+        noFaceFrames.current = 0;
+        setShowHint(false);
         setFaceFound(true);
         const ear = computeEAR(lm);
 
@@ -180,6 +192,13 @@ export function LivenessCapture({ onCapture, onCancel }: { onCapture: (b: string
       <video ref={videoRef} autoPlay muted playsInline style={{ width: "100%", display: "block", maxHeight: 280, transform: "scaleX(-1)" }} />
       <canvas ref={canvasRef} style={{ display: "none" }} />
       <div className="face-guide" />
+      {showHint && stage === "challenge" && (
+        <div style={{ position: "absolute", bottom: 52, left: 12, right: 12, background: "rgba(255,171,0,0.85)", borderRadius: 8, padding: "7px 12px", textAlign: "center" }}>
+          <span style={{ fontSize: 12, fontFamily: "IBM Plex Mono", color: "#000", fontWeight: 600 }}>
+            💡 Vire de frente para a luz e evite claridade forte atrás de você
+          </span>
+        </div>
+      )}
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", background: "rgba(0,0,0,0.55)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 20 }}>{info.icon}</span>
@@ -253,7 +272,7 @@ export function BiometriaPage({ funcionarios, setFuncionarios, toast }: Props) {
         clearInterval(iv);
         setTimeout(async () => {
           const qualidade = descriptor_json ? 99 : +(90 + Math.random() * 9).toFixed(1);
-          const novaBio: Biometria = { funcionario_id: func!.id!, tipo: type!, data: new Date().toISOString().split("T")[0], qualidade, imagem_base64: descriptor_json ? null : imagemBase64, descriptor_json };
+          const novaBio: Biometria = { funcionario_id: func!.id!, tipo: type!, data: new Date().toISOString().split("T")[0], qualidade, imagem_base64: imagemBase64, descriptor_json };
           try {
             const res = await apiFetch('/api/biometrias', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novaBio) });
             const data = await res.json();

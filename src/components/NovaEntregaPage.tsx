@@ -47,6 +47,7 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
   const [facePhoto, setFacePhoto] = useState<string|null>(null);
   const [faceScore, setFaceScore] = useState<number|null>(null);
   const [faceOverride, setFaceOverride] = useState(false);
+  const [refImage, setRefImage] = useState<string|null>(null);
 
   useEffect(() => {
     if (func) {
@@ -61,6 +62,18 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
     setFacePhoto(null);
     setFaceScore(null);
     setFaceOverride(false);
+    if (t === "facial") {
+      const funcAtual = funcionarios.find(f => f.id === func?.id) ?? func;
+      const bio = funcAtual?.biometrias?.find(b => b.tipo === "facial");
+      if (bio?.id) {
+        apiFetch(`/api/biometrias/${bio.id}/imagem`)
+          .then(r => r.json())
+          .then(d => setRefImage(d.imagem_base64 ?? null))
+          .catch(() => setRefImage(null));
+      } else {
+        setRefImage(null);
+      }
+    }
   };
 
   const handleFaceCapture = async (base64: string) => {
@@ -479,7 +492,6 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
 
       {step === 3 && (() => {
         const funcAtual = funcionarios.find(f => f.id === func?.id) ?? func;
-        const bioFacial = funcAtual?.biometrias?.find(b => b.tipo === "facial");
         const getBio = (tipo: string) =>
           funcAtual?.biometrias
             ?.filter(b => b.tipo === tipo)
@@ -507,8 +519,8 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
                 {bioOpts.map(o => (
                   <div key={o.t} className={`bio-option${sigType === o.t ? " active" : ""}`} onClick={() => selectSigType(o.t)}
                     style={{ alignItems: "flex-start", gap: 10 }}>
-                    {o.t === "facial" && (o.bio as any)?.imagem_base64
-                      ? <img src={(o.bio as any).imagem_base64} alt="bio" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border2)" }} />
+                    {o.t === "facial" && refImage
+                      ? <img src={refImage} alt="bio" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border2)" }} />
                       : <div className="bio-option-icon" style={{ flexShrink: 0 }}>{o.icon}</div>}
                     <div style={{ minWidth: 0 }}>
                       <div className="bio-option-title">{o.title}</div>
@@ -528,7 +540,7 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
                   <div style={{ fontSize: 52, marginBottom: 12 }}>📷</div>
                   <div style={{ color: "var(--text2)", marginBottom: 6 }}>Posicione o rosto do funcionário na câmera</div>
                   <div style={{ fontSize: 12, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginBottom: 20 }}>
-                    {bioFacial?.imagem_base64 ? "Foto de referência disponível — comparação real será realizada" : "Sem foto de referência — comparação simulada"}
+                    {refImage ? "Foto de referência disponível — comparação real será realizada" : "Sem foto de referência — comparação simulada"}
                   </div>
                   <button className="btn btn-primary" onClick={() => setFaceStage("capture")}>Iniciar Câmera</button>
                 </div>
@@ -578,8 +590,8 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
                   <div style={{ display: "flex", gap: 20, justifyContent: "center", alignItems: "center", marginBottom: 16 }}>
                     <div style={{ textAlign: "center" }}>
                       <div style={{ fontSize: 10, color: "var(--text3)", fontFamily: "IBM Plex Mono", marginBottom: 6, letterSpacing: 1 }}>CADASTRO</div>
-                      {bioFacial?.imagem_base64
-                        ? <img src={bioFacial.imagem_base64} alt="ref" style={{ width: 96, height: 96, borderRadius: 10, objectFit: "cover", border: "2px solid var(--border2)" }} />
+                      {refImage
+                        ? <img src={refImage} alt="ref" style={{ width: 96, height: 96, borderRadius: 10, objectFit: "cover", border: "2px solid var(--border2)" }} />
                         : <div style={{ width: 96, height: 96, borderRadius: 10, background: "var(--surface2)", border: "2px dashed var(--border2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>👤</div>}
                     </div>
                     <div style={{ textAlign: "center" }}>

@@ -430,6 +430,16 @@ export function atualizarDescriptorBiometria(id: number, descriptor_json: string
     });
 }
 
+// READ imagem_base64 de uma biometria (buscado sob demanda)
+export function buscarImagemBiometria(id: number): Promise<string | null> {
+    return new Promise((resolve, reject) => {
+        db.get(`SELECT imagem_base64 FROM biometrias WHERE id = ?`, [id], (err, row: any) => {
+            if (err) return reject(err);
+            resolve(row?.imagem_base64 ?? null);
+        });
+    });
+}
+
 // DELETE Biometria
 export function deletarBiometria(id: number): Promise<void> {
     return new Promise((resolve, reject) => {

@@ -8,6 +8,12 @@ export const css = `
     --red: #ff4757; --green: #2ed573; --blue: #1e90ff; --purple: #a855f7;
     --text: #e8edf5; --text2: #8899aa; --text3: #4a5a6b;
   }
+  html.light-mode {
+    --bg: #EEEEEE; --surface: #FFFFFF; --surface2: #E2E2E2;
+    --border: #D0D5DD; --border2: #B0BAC9;
+    --orange-dim: rgba(245,166,35,0.10); --orange-glow: rgba(245,166,35,0.20);
+    --text: #111827; --text2: #374151; --text3: #6B7280;
+  }
   body { background: var(--bg); font-family: 'Barlow', sans-serif; color: var(--text); }
   .app { display: flex; height: 100vh; overflow: hidden; }
   .sidebar { width: 220px; min-width: 220px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
