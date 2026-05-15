@@ -84,21 +84,23 @@ export function EpisPorFuncionarioPage({ entregas, funcionarios }: Props) {
     // ── Linha empresa ──────────────────────────────────────────────────────────
     const empH = 9;
     box(empH);
-    const xEmp = mg + cw * 0.45;
-    vline(xEmp, empH);
+    const xEmp  = mg + cw * 0.45;
+    const xCnpj = mg + cw * 0.78;
+    vline(xEmp,  empH);
+    vline(xCnpj, empH);
 
     doc.setFontSize(6.5);
     doc.setFont("helvetica", "bold");
-    doc.text("EMPRESA:",   mg + 2,    y + 3.5);
-    doc.text("ENDEREÇO:", xEmp + 2,  y + 3.5);
-    doc.text("CNPJ:", xEmp + 2,  y + 3.5);
+    doc.text("EMPRESA:",   mg + 2,     y + 3.5);
+    doc.text("ENDEREÇO:", xEmp + 2,   y + 3.5);
+    doc.text("CNPJ:",     xCnpj + 2,  y + 3.5);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.text(COMPANY_CONFIG.nome, mg + 2, y + 7.5);
-    const enderecoLine = doc.splitTextToSize(COMPANY_CONFIG.endereco, pageW - xEmp - mg - 3)[0] ?? "";
-    doc.text(enderecoLine, xEmp + 2, y + 7.5);
-    doc.text(COMPANY_CONFIG.cnpj, xEmp + 2, y + 7.5);
+    const enderecoLine = doc.splitTextToSize(COMPANY_CONFIG.endereco, xCnpj - xEmp - 3)[0] ?? "";
+    doc.text(enderecoLine,        xEmp + 2,   y + 7.5);
+    doc.text(COMPANY_CONFIG.cnpj, xCnpj + 2,  y + 7.5);
     y += empH;
 
     // ── Subtítulo ──────────────────────────────────────────────────────────────
