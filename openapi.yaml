@@ -1,0 +1,1215 @@
+openapi: 3.0.3
+info:
+  title: SegurID — API de Gestão de EPIs
+  description: |
+    API REST do sistema SegurID para gestão de Equipamentos de Proteção Individual (EPIs),
+    funcionários, entregas com assinatura biométrica e log de auditoria.
+
+    ## Autenticação
+    A API usa cookies `httpOnly` (`epi_session`) com JWT de 8 horas.
+    Todas as rotas, exceto `/api/auth/login` e `/api/auth/logout`, exigem cookie válido.
+
+    ## Perfis de acesso
+    | Perfil       | Descrição                                      |
+    |-------------|------------------------------------------------|
+    | `admin`     | Acesso total, incluindo usuários e auditoria   |
+    | `operador`  | CRUD de EPIs, funcionários, entregas           |
+    | `colaborador` | Somente leitura                              |
+
+    ## Rate limiting
+    - Login: 5 tentativas por 15 minutos por IP
+    - Troca de senha: 5 tentativas por 5 minutos por IP
+  version: 1.0.0
+  contact:
+    name: Vitor Fernandes Ferreira
+
+servers:
+  - url: http://localhost:3000
+    description: Desenvolvimento local
+  - url: https://segurid.com.br
+    description: Produção
+
+tags:
+  - name: Auth
+    description: Autenticação e sessão
+  - name: Entregas
+    description: Entregas de EPIs com assinatura
+  - name: Funcionários
+    description: Cadastro de funcionários
+  - name: EPIs
+    description: Estoque e cadastro de EPIs
+  - name: Cargos
+    description: Tabela de cargos
+  - name: Biometrias
+    description: Biometrias faciais e digitais
+  - name: Usuários
+    description: Gestão de usuários do sistema (somente admin)
+  - name: Auditoria
+    description: Log de auditoria (somente admin)
+
+# ─── Componentes reutilizáveis ────────────────────────────────────────────────
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: epi_session
+
+  schemas:
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Mensagem de erro
+
+    Success:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+
+    Usuario:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        nome:
+          type: string
+          example: João da Silva
+        username:
+          type: string
+          example: joao.silva
+        role:
+          type: string
+          enum: [admin, operador, colaborador]
+          example: operador
+        trocar_senha:
+          type: integer
+          enum: [0, 1]
+          description: 1 = usuário deve trocar a senha no próximo login
+          example: 0
+
+    Funcionario:
+      type: object
+      required: [nome, matricula, setor, cargo, email, telefone]
+      properties:
+        id:
+          type: integer
+          example: 42
+        nome:
+          type: string
+          maxLength: 120
+          example: Maria Souza
+        matricula:
+          type: string
+          maxLength: 40
+          example: F-0042
+        setor:
+          type: string
+          example: Produção
+        cargo:
+          type: string
+          example: Operador de Linha
+        email:
+          type: string
+          format: email
+          example: maria.souza@empresa.com
+        telefone:
+          type: string
+          example: "(11) 99999-0000"
+        admissao:
+          type: string
+          format: date
+          example: "2024-01-15"
+        biometrias:
+          type: array
+          items:
+            $ref: '#/components/schemas/Biometria'
+
+    Biometria:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 7
+        funcionario_id:
+          type: integer
+          example: 42
+        tipo:
+          type: string
+          enum: [facial, digital, manual]
+          example: facial
+        data:
+          type: string
+          format: date
+          example: "2024-03-10"
+        qualidade:
+          type: number
+          example: 92.5
+        imagem_base64:
+          type: string
+          description: Imagem da biometria em Base64 (só presente no endpoint /imagem)
+        descriptor_json:
+          type: string
+          description: Vetor de características faciais serializado em JSON
+
+    Epi:
+      type: object
+      required: [nome, estoque, minimo]
+      properties:
+        id:
+          type: integer
+          example: 3
+        nome:
+          type: string
+          maxLength: 120
+          example: Capacete de Segurança
+        ca:
+          type: string
+          description: Número do Certificado de Aprovação (legado, use cas_json)
+          example: "12345"
+        cas_json:
+          type: string
+          description: JSON array com objetos {numero, validade}
+          example: '[{"numero":"12345","validade":"2026-12-31"}]'
+        categoria:
+          type: string
+          example: Proteção da Cabeça
+        estoque:
+          type: integer
+          minimum: 0
+          example: 50
+        minimo:
+          type: integer
+          minimum: 0
+          description: Estoque mínimo para alerta
+          example: 10
+        validade:
+          type: string
+          format: date
+          example: "2026-06-30"
+        img:
+          type: string
+          description: Emoji ou URL da imagem
+          example: "⛑️"
+        periodicidade:
+          type: integer
+          minimum: 1
+          maximum: 3650
+          description: Periodicidade de troca em dias
+          example: 365
+        descricao:
+          type: string
+          maxLength: 1000
+          example: Capacete classe A com carneira ajustável
+        norma:
+          type: string
+          example: "ABNT NBR 8221"
+        fabricante:
+          type: string
+          example: 3M
+
+    EntregaItem:
+      type: object
+      required: [epi_id, nome, qtd]
+      properties:
+        epi_id:
+          type: integer
+          example: 3
+        nome:
+          type: string
+          example: Capacete de Segurança
+        img:
+          type: string
+          example: "⛑️"
+        qtd:
+          type: integer
+          minimum: 1
+          example: 1
+        ca:
+          type: string
+          example: "12345"
+
+    Entrega:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 101
+        funcionario_id:
+          type: integer
+          example: 42
+        funcionario:
+          type: string
+          example: Maria Souza
+        status:
+          type: string
+          enum: [pendente_assinatura, assinado, cancelado]
+          example: assinado
+        tipo_assinatura:
+          type: string
+          enum: [facial, digital, manual, facial_override]
+          nullable: true
+          example: facial
+        confianca:
+          type: number
+          minimum: 0
+          maximum: 100
+          nullable: true
+          example: 97.3
+        data:
+          type: string
+          format: date
+          example: "2024-05-14"
+        data_criacao:
+          type: string
+          format: date-time
+          example: "2024-05-14T10:30:00Z"
+        assinatura_img:
+          type: string
+          nullable: true
+          description: Imagem da assinatura manuscrita em Base64
+        itens:
+          type: array
+          items:
+            $ref: '#/components/schemas/EntregaItem'
+
+    Cargo:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 5
+        nome:
+          type: string
+          example: Operador de Linha
+
+    AuditEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 200
+        momento:
+          type: string
+          format: date-time
+          example: "2024-05-14T10:30:00Z"
+        usuario_id:
+          type: integer
+          nullable: true
+          example: 1
+        usuario:
+          type: string
+          example: admin
+        acao:
+          type: string
+          example: entrega_assinada
+        entidade:
+          type: string
+          nullable: true
+          example: entrega
+        entidade_id:
+          type: integer
+          nullable: true
+          example: 101
+        detalhe:
+          type: string
+          nullable: true
+          example: "Tipo: facial"
+
+  responses:
+    Unauthorized:
+      description: Não autenticado — cookie ausente, expirado ou revogado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Sem permissão para esta operação
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    BadRequest:
+      description: Dados inválidos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+security:
+  - cookieAuth: []
+
+# ─── Paths ────────────────────────────────────────────────────────────────────
+paths:
+
+  # ── Auth ────────────────────────────────────────────────────────────────────
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Autenticar usuário
+      description: |
+        Valida credenciais e define o cookie `epi_session` (httpOnly, SameSite=Strict).
+        Rate limit: 5 tentativas por 15 minutos por IP.
+        Se `trocar_senha = 1`, o frontend deve redirecionar para a tela de troca de senha.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, senha]
+              properties:
+                username:
+                  type: string
+                  example: admin
+                senha:
+                  type: string
+                  format: password
+                  example: MinhaSenh@1
+      responses:
+        '200':
+          description: Login bem-sucedido — cookie `epi_session` definido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Credenciais inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Muitas tentativas — aguarde 15 minutos
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Encerrar sessão
+      description: Revoga o JTI do token atual e remove o cookie `epi_session`.
+      security: []
+      responses:
+        '200':
+          description: Sessão encerrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+
+  /api/auth/change-password:
+    post:
+      tags: [Auth]
+      summary: Trocar senha (obrigatório no primeiro login)
+      description: |
+        Valida a senha atual, aplica a nova e emite um novo cookie com `trocar_senha = 0`.
+        Regras de senha: mínimo 8 caracteres + ao menos 1 número ou caractere especial.
+        Rate limit: 5 tentativas por 5 minutos por IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [senha_atual, senha_nova]
+              properties:
+                senha_atual:
+                  type: string
+                  format: password
+                senha_nova:
+                  type: string
+                  format: password
+                  minLength: 8
+      responses:
+        '200':
+          description: Senha alterada — novo cookie emitido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Não autenticado ou senha atual incorreta
+        '429':
+          description: Muitas tentativas — aguarde 5 minutos
+
+  # ── Entregas ─────────────────────────────────────────────────────────────────
+
+  /api/entregas:
+    get:
+      tags: [Entregas]
+      summary: Listar entregas
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 500
+            maximum: 1000
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Lista de entregas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Entrega'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Entregas]
+      summary: Criar entrega
+      description: Requer perfil `operador` ou `admin`. Máximo de 100 itens por entrega.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [funcionario_id, funcionario, data, itens]
+              properties:
+                funcionario_id:
+                  type: integer
+                  example: 42
+                funcionario:
+                  type: string
+                  example: Maria Souza
+                data:
+                  type: string
+                  format: date
+                  example: "2024-05-14"
+                itens:
+                  type: array
+                  maxItems: 100
+                  items:
+                    $ref: '#/components/schemas/EntregaItem'
+      responses:
+        '201':
+          description: Entrega criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entrega'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/entregas/{id}:
+    put:
+      tags: [Entregas]
+      summary: Atualizar status da entrega
+      description: |
+        Requer perfil `operador` ou `admin`.
+        Usado para assinar (`assinado`) ou cancelar (`cancelado`) uma entrega.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [pendente_assinatura, assinado, cancelado]
+                tipo_assinatura:
+                  type: string
+                  enum: [facial, digital, manual, facial_override]
+                confianca:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                  nullable: true
+                assinatura_img:
+                  type: string
+                  description: Base64 da assinatura manuscrita
+      responses:
+        '200':
+          description: Entrega atualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── Funcionários ─────────────────────────────────────────────────────────────
+
+  /api/funcionarios:
+    get:
+      tags: [Funcionários]
+      summary: Listar funcionários
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 500
+            maximum: 1000
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Lista de funcionários com suas biometrias
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Funcionario'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Funcionários]
+      summary: Criar funcionário
+      description: Requer perfil `operador` ou `admin`. E-mail e telefone devem ser únicos.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Funcionario'
+      responses:
+        '201':
+          description: Funcionário criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Funcionario'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: E-mail ou telefone já cadastrado
+
+  /api/funcionarios/{id}:
+    put:
+      tags: [Funcionários]
+      summary: Atualizar funcionário
+      description: Requer perfil `operador` ou `admin`.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Funcionario'
+      responses:
+        '200':
+          description: Funcionário atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    delete:
+      tags: [Funcionários]
+      summary: Excluir funcionário
+      description: |
+        Requer perfil `operador` ou `admin`.
+        Retorna 409 se o funcionário possuir entregas pendentes de assinatura.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Funcionário excluído
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Funcionário possui entregas pendentes
+
+  # ── EPIs ─────────────────────────────────────────────────────────────────────
+
+  /api/epis:
+    get:
+      tags: [EPIs]
+      summary: Listar EPIs
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 200
+            maximum: 500
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Lista de EPIs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Epi'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [EPIs]
+      summary: Criar EPI
+      description: Requer perfil `operador` ou `admin`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Epi'
+      responses:
+        '201':
+          description: EPI criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Epi'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/epis/{id}:
+    put:
+      tags: [EPIs]
+      summary: Atualizar EPI
+      description: Requer perfil `operador` ou `admin`.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Epi'
+      responses:
+        '200':
+          description: EPI atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    delete:
+      tags: [EPIs]
+      summary: Excluir EPI
+      description: Requer perfil `operador` ou `admin`.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: EPI excluído
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── Cargos ───────────────────────────────────────────────────────────────────
+
+  /api/cargos:
+    get:
+      tags: [Cargos]
+      summary: Listar cargos
+      responses:
+        '200':
+          description: Lista de cargos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Cargo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Cargos]
+      summary: Criar cargo
+      description: Requer perfil `operador` ou `admin`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nome]
+              properties:
+                nome:
+                  type: string
+                  example: Soldador
+      responses:
+        '201':
+          description: Cargo criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cargo'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/cargos/{id}:
+    put:
+      tags: [Cargos]
+      summary: Atualizar cargo
+      description: Requer perfil `operador` ou `admin`.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nome]
+              properties:
+                nome:
+                  type: string
+      responses:
+        '200':
+          description: Cargo atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    delete:
+      tags: [Cargos]
+      summary: Excluir cargo
+      description: Requer perfil `operador` ou `admin`.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Cargo excluído
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── Biometrias ───────────────────────────────────────────────────────────────
+
+  /api/biometrias:
+    post:
+      tags: [Biometrias]
+      summary: Registrar biometria
+      description: |
+        Requer perfil `operador` ou `admin`.
+        O payload pode ter até 2 MB (limite do Express). Para biometria facial,
+        envie `imagem_base64` apenas quando não houver `descriptor_json`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [funcionario_id, tipo, data]
+              properties:
+                funcionario_id:
+                  type: integer
+                tipo:
+                  type: string
+                  enum: [facial, digital, manual]
+                data:
+                  type: string
+                  format: date
+                  example: "2024-05-14"
+                qualidade:
+                  type: number
+                  example: 92.5
+                imagem_base64:
+                  type: string
+                descriptor_json:
+                  type: string
+      responses:
+        '201':
+          description: Biometria registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Biometria'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/biometrias/{id}/imagem:
+    get:
+      tags: [Biometrias]
+      summary: Buscar imagem de biometria
+      description: Requer perfil `operador` ou `admin`.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Imagem em Base64
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imagem_base64:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/biometrias/{id}/descriptor:
+    patch:
+      tags: [Biometrias]
+      summary: Atualizar descriptor facial
+      description: |
+        Requer perfil `operador` ou `admin`.
+        Atualiza o vetor de características da biometria facial sem substituir a imagem.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                descriptor_json:
+                  type: string
+                  nullable: true
+                  description: JSON serializado do Float32Array do face-api.js
+      responses:
+        '200':
+          description: Descriptor atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/biometrias/{id}:
+    delete:
+      tags: [Biometrias]
+      summary: Excluir biometria
+      description: Requer perfil `operador` ou `admin`.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Biometria excluída
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── Usuários ─────────────────────────────────────────────────────────────────
+
+  /api/users:
+    get:
+      tags: [Usuários]
+      summary: Listar usuários
+      description: Somente `admin`. Senhas nunca são retornadas.
+      responses:
+        '200':
+          description: Lista de usuários
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Usuario'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Usuários]
+      summary: Criar usuário
+      description: |
+        Somente `admin`.
+        Regras de username: 3–40 caracteres alfanuméricos, `_` ou `-`.
+        Regras de senha: mínimo 8 caracteres + ao menos 1 número ou símbolo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nome, username, senha, role]
+              properties:
+                nome:
+                  type: string
+                  maxLength: 80
+                  example: Ana Lima
+                username:
+                  type: string
+                  pattern: '^[a-zA-Z0-9_\-]{3,40}$'
+                  example: ana.lima
+                senha:
+                  type: string
+                  format: password
+                  minLength: 8
+                role:
+                  type: string
+                  enum: [admin, operador, colaborador]
+      responses:
+        '201':
+          description: Usuário criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/users/{id}:
+    put:
+      tags: [Usuários]
+      summary: Atualizar usuário
+      description: Somente `admin`. A senha só é alterada se o campo `senha` for enviado.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nome:
+                  type: string
+                  maxLength: 80
+                username:
+                  type: string
+                  pattern: '^[a-zA-Z0-9_\-]{3,40}$'
+                senha:
+                  type: string
+                  format: password
+                  description: Opcional — omita para não alterar
+                role:
+                  type: string
+                  enum: [admin, operador, colaborador]
+      responses:
+        '200':
+          description: Usuário atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    delete:
+      tags: [Usuários]
+      summary: Excluir usuário
+      description: |
+        Somente `admin`.
+        Não é permitido excluir a própria conta nem o único administrador.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Usuário excluído
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── Auditoria ────────────────────────────────────────────────────────────────
+
+  /api/audit-log:
+    get:
+      tags: [Auditoria]
+      summary: Consultar log de auditoria
+      description: Somente `admin`.
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+            maximum: 500
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: acao
+          schema:
+            type: string
+            example: entrega_assinada
+          description: Filtrar por ação específica
+        - in: query
+          name: usuario
+          schema:
+            type: string
+            example: admin
+          description: Filtrar por username do operador
+      responses:
+        '200':
+          description: Log de auditoria paginado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditEntry'
+                  total:
+                    type: integer
+                    description: Total de registros (para paginação)
+                    example: 342
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
