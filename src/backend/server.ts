@@ -9,7 +9,7 @@ import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios
 
 const app = express();
 app.set('trust proxy', 1);
-const PORT = 3000;
+const PORT = parseInt(process.env.PORT ?? '3000');
 
 if (!process.env.JWT_SECRET) {
     console.error('FATAL: JWT_SECRET não está definido. Configure a variável de ambiente antes de iniciar o servidor.');

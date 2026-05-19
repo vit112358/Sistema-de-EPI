@@ -26,5 +26,6 @@ dist-ssr
 /resources/
 backup.sh
 deploy.sh
+provision.sh
 reset_db.sh
 /backups/
