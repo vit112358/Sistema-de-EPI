@@ -2,7 +2,7 @@
 
 Sistema para controle de Equipamentos de Proteção Individual (EPIs): estoque, entregas, assinatura biométrica (facial, digital, manuscrita) e rastreabilidade completa via log de auditoria.
 
-**Produção:** https://segurid.com.br
+**Produção:** https://segurid.com.br — modelo multi-cliente: cada empresa acessa via `slug.segurid.com.br`, com banco e processo PM2 isolados.
 
 ---
 
@@ -182,7 +182,7 @@ Cookie `epi_session` (httpOnly, SameSite=Strict, 8h) é definido automaticamente
 | Rate limiting                  | Login: 5/15min · Troca de senha: 5/5min                   |
 | Autorização                    | Middleware por rota (`soAdmin`, `soOperadorOuAdmin`)        |
 | Validação de input             | Funções `validar*` em todas as rotas POST/PUT              |
-| CORS                           | Whitelist: localhost:5173 + segurid.com.br                 |
+| CORS                           | Whitelist: localhost:5173 + segurid.com.br + *.segurid.com.br |
 | Payload máximo                 | 2 MB (biometrias base64)                                   |
 | Log de auditoria               | Toda operação mutável registrada com usuário e timestamp   |
 | Proteção de exclusão           | Funcionário com entrega pendente não pode ser excluído     |
@@ -191,67 +191,71 @@ Cookie `epi_session` (httpOnly, SameSite=Strict, 8h) é definido automaticamente
 
 ## Deploy
 
-### Script automatizado
+### Atualizar cliente existente
 ```bash
-bash deploy.sh           # build + deploy completo
+bash deploy.sh               # build + deploy completo
 bash deploy.sh --skip-build  # só envia arquivos (sem rebuild)
 ```
 
-O script:
-1. Faz build do frontend (`npm run build`)
-2. Envia `dist/`, `src/backend/`, `package.json` via SCP
-3. Executa `npm install --omit=dev` no servidor
-4. Copia `dist/` para `/var/www/html/app/`
-5. Reinicia o backend com `pm2 restart backend`
+O script envia `dist/`, `src/backend/`, `package.json` via SCP e reinicia o PM2 do cliente principal (`backend`, porta 3000).
 
-### Variáveis de ambiente no servidor (PM2)
+### Provisionar novo cliente
 ```bash
-pm2 set backend:JWT_SECRET <valor>
-pm2 set backend:ADMIN_PASSWORD <valor>
-pm2 restart backend
+bash provision.sh <slug> <porta>
+# Exemplo: bash provision.sh acme 3001
+# Segundo cliente: bash provision.sh beta 3002
+
+# Se o build já foi feito:
+bash provision.sh acme 3001 --skip-build
 ```
 
-> **Atenção:** O servidor não inicia sem `JWT_SECRET` e `ADMIN_PASSWORD` definidos.
+O script cria automaticamente:
+1. Diretório isolado `/home/ubuntu/app-<slug>/` com banco SQLite próprio
+2. Frontend estático em `/var/www/html/<slug>/`
+3. Processo PM2 `backend-<slug>` na porta indicada
+4. Virtual host nginx para `<slug>.segurid.com.br`
+5. Certificado HTTPS via Let's Encrypt (certbot)
+
+> **Pré-requisito DNS:** adicione um registro A `<slug>` → `163.176.188.254` no Registro.br antes de rodar o script (o certbot valida o domínio).
+
+### Variáveis de ambiente por cliente (PM2)
+Após provisionar, configure as credenciais do cliente via SSH:
+```bash
+pm2 set backend-<slug>:JWT_SECRET <segredo-forte>
+pm2 set backend-<slug>:ADMIN_PASSWORD <senha-inicial>
+PORT=<porta> pm2 restart backend-<slug>
+pm2 save
+```
+
+> **Atenção:** O backend não inicia sem `JWT_SECRET` e `ADMIN_PASSWORD` definidos.
 
 ### Infraestrutura
-- **VM:** Oracle Cloud Free Tier — Ubuntu 22.04 (São Paulo)
+- **VM:** Oracle Cloud Free Tier — Ubuntu 22.04, 1 GB RAM (suporta ~5–6 clientes simultâneos)
 - **IP:** 163.176.188.254
-- **Domínio:** segurid.com.br (HTTPS via Let's Encrypt, renovação automática)
-- **Processo:** PM2 com `tsx` para TypeScript direto
-- **Proxy:** nginx → `/api/` → `localhost:3000`, resto → `/var/www/html/app/`
+- **DNS:** registro A por cliente no Registro.br (`slug` → `163.176.188.254`)
+- **Processo:** PM2 + ts-node por instância, porta exclusiva por cliente
+- **Proxy:** nginx virtual host por subdomínio → `/api/` → `localhost:<porta>`, estáticos → `/var/www/html/<slug>/`
+- **SSL:** Let's Encrypt por subdomínio, renovação automática via certbot
 
-### Nginx (`/etc/nginx/sites-available/app`)
+### Nginx — estrutura por cliente (`/etc/nginx/sites-available/<slug>`)
 ```nginx
 server {
-    listen 443 ssl;
-    server_name segurid.com.br www.segurid.com.br;
+    listen 80;
+    server_name <slug>.segurid.com.br;
 
-    root /var/www/html/app;
+    root /var/www/html/<slug>;
     index index.html;
 
     location /api/ {
-        proxy_pass http://localhost:3000;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_pass http://localhost:<porta>;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
     }
 
     location / {
         try_files $uri $uri/ /index.html;
     }
 }
-
-server {
-    listen 80;
-    server_name segurid.com.br www.segurid.com.br;
-    return 301 https://$host$request_uri;
-}
 ```
-
----
-
-## Multi-tenant (futuro)
-
-Para suportar múltiplas empresas no mesmo servidor, ver seções no final deste arquivo sobre:
-- **Instância por empresa** (~15 empresas em 1 GB RAM, processos isolados)
-- **Multi-tenant** (um processo, bancos SQLite separados por tenant)
-
-A migração envolve adaptar `server.ts` e `database.ts` para receber o tenant como parâmetro via subdomínio no JWT. Recomendado a partir de ~10 clientes.
+O certbot adiciona automaticamente o bloco SSL e o redirect 80 → 443.

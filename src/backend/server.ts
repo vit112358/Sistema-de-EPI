@@ -29,11 +29,19 @@ app.listen(PORT, '0.0.0.0', () => {
 });
 
 app.use(cors({
-    origin: [
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
-        'https://segurid.com.br',
-    ],
+    origin: (origin, callback) => {
+        if (
+            !origin ||
+            origin === 'http://localhost:5173' ||
+            origin === 'http://127.0.0.1:5173' ||
+            origin === 'https://segurid.com.br' ||
+            /^https:\/\/[a-z0-9-]+\.segurid\.com\.br$/.test(origin)
+        ) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     credentials: true,
 }));
