@@ -259,3 +259,29 @@ server {
 }
 ```
 O certbot adiciona automaticamente o bloco SSL e o redirect 80 → 443.
+
+---
+
+## Melhorias planejadas
+
+### Esqueceu a senha (reset por e-mail)
+
+Fluxo self-service via **Resend** (3.000 e-mails/mês no free tier) — elimina necessidade de o admin resetar manualmente.
+
+**Fluxo:**
+1. Usuário clica "Esqueceu a senha?" na tela de login
+2. Informa username ou e-mail → `POST /api/auth/forgot` (sempre retorna HTTP 200 genérico para evitar enumeração)
+3. Recebe e-mail com link `https://<slug>.segurid.com.br?token=<token>`
+4. App detecta `?token=` na URL e exibe tela de nova senha
+5. `POST /api/auth/reset` valida token e salva nova senha com bcrypt
+
+**Segurança:** token de 256 bits (`randomBytes(32)`), banco armazena apenas SHA-256, expira em 1 hora, rate limit 3 req/15min no `/forgot`.
+
+**Variáveis de ambiente necessárias:**
+```env
+RESEND_API_KEY=re_xxxx
+RESEND_FROM=noreply@segurid.com.br
+APP_URL=https://<slug>.segurid.com.br
+```
+
+**Dependência:** `npm install resend`
