@@ -264,6 +264,14 @@ O certbot adiciona automaticamente o bloco SSL e o redirect 80 → 443.
 
 ## Melhorias planejadas
 
+### Backup do banco de dados
+
+Script `backup.sh` já implementado — baixa o `.sqlite` via SCP para `backups/` (sincronizado pelo OneDrive), mantém os últimos 10 arquivos. Rode manualmente ou agende no Task Scheduler do Windows.
+
+> **Pendência multi-cliente:** o script atualmente só cobre o banco principal (`/home/ubuntu/app/`). Clientes provisionados com `provision.sh` têm bancos separados que ainda não são incluídos no backup.
+
+---
+
 ### Esqueceu a senha (reset por e-mail)
 
 Fluxo self-service via **Resend** (3.000 e-mails/mês no free tier) — elimina necessidade de o admin resetar manualmente.
