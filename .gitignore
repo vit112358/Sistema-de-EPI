@@ -28,4 +28,5 @@ backup.sh
 deploy.sh
 provision.sh
 reset_db.sh
+create-ampere.ps1
 /backups/
