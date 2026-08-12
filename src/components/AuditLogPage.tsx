@@ -12,6 +12,8 @@ interface LogEntry {
 }
 
 const ACAO_LABEL: Record<string, string> = {
+  login_sucesso:          "🔓 Login",
+  login_falha:            "⛔ Login falhou",
   entrega_criada:         "📋 Entrega criada",
   entrega_assinada:       "✅ Assinatura",
   entrega_cancelada:      "🚫 Cancelamento",
@@ -27,6 +29,8 @@ const ACAO_LABEL: Record<string, string> = {
 };
 
 const ACAO_CLASS: Record<string, string> = {
+  login_sucesso:          "badge-green",
+  login_falha:            "badge-red",
   entrega_criada:         "badge-blue",
   entrega_assinada:       "badge-green",
   entrega_cancelada:      "badge-red",

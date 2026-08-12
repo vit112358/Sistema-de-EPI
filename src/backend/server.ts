@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import { randomUUID } from 'crypto';
-import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, deletarFuncionario, temEntregasPendentes, listarEpis, criarEpi, atualizarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, buscarImagemBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha, registrarAuditoria, listarAuditLog, contarAuditLog} from './crud.ts';
+import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, buscarFuncionario, deletarFuncionario, temEntregasPendentes, listarEpis, criarEpi, atualizarEpi, buscarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, buscarImagemBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha, registrarAuditoria, listarAuditLog, contarAuditLog, buscarAuditLog, buscarIdempotencyKey, salvarIdempotencyKey} from './crud.ts';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -79,6 +79,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 
         if (!user) {
             await bcrypt.compare('dummy', '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ012');
+            await registrarAuditoria('login_falha', 'usuario', null, `IP: ${req.ip}`, null, username);
             return res.status(401).json({ error: 'Credenciais inválidas' });
         }
 
@@ -93,7 +94,12 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
             }
         }
 
-        if (!valido) return res.status(401).json({ error: 'Credenciais inválidas' });
+        if (!valido) {
+            await registrarAuditoria('login_falha', 'usuario', user.id ?? null, `IP: ${req.ip}`, user.id ?? null, username);
+            return res.status(401).json({ error: 'Credenciais inválidas' });
+        }
+
+        await registrarAuditoria('login_sucesso', 'usuario', user.id ?? null, `IP: ${req.ip}`, user.id ?? null, user.username);
 
         const { senha: _s, ...userSemSenha } = user;
         const jti = randomUUID();
@@ -341,6 +347,29 @@ function actor(req: express.Request): { id: number; username: string } {
     return { id: u.id ?? null, username: u.username ?? 'desconhecido' };
 }
 
+// Idempotência para a fila de sincronização offline (Fase 3): o cliente manda um
+// UUID por operação no header Idempotency-Key. Um replay (resposta original se
+// perdeu na rede, cliente reenvia) devolve o 2xx cacheado em vez de duplicar a
+// escrita. Só 2xx entra no cache — um 500 transitório cacheado transformaria
+// erro passageiro em erro permanente para aquela chave.
+async function idempotente(req: express.Request, res: express.Response, next: express.NextFunction) {
+    const key = req.header('Idempotency-Key');
+    if (!key) return next();
+    try {
+        const hit = await buscarIdempotencyKey(key);
+        if (hit) { res.status(hit.status).json(JSON.parse(hit.body)); return; }
+    } catch { /* falha ao consultar cache não deve bloquear a escrita */ }
+
+    const jsonOriginal = res.json.bind(res);
+    (res as any).json = (body: unknown) => {
+        if (res.statusCode < 300) {
+            salvarIdempotencyKey(key, res.statusCode, JSON.stringify(body)).catch(() => {});
+        }
+        return jsonOriginal(body);
+    };
+    next();
+}
+
 // ─── Entregas ─────────────────────────────────────────────────────────────────
 
 app.get('/api/entregas', async (req, res) => {
@@ -355,16 +384,20 @@ app.get('/api/entregas', async (req, res) => {
     }
 });
 
-app.post('/api/entregas', soOperadorOuAdmin, async (req, res) => {
+app.post('/api/entregas', soOperadorOuAdmin, idempotente, async (req, res) => {
     const err = validarEntregaPost(req.body);
     if (err) return res.status(400).json({ error: err });
     try {
         const novaEntrega = req.body;
-        const id = await criarEntrega(novaEntrega);
+        const { id, overdraft } = await criarEntrega(novaEntrega);
         const a = actor(req);
         await registrarAuditoria('entrega_criada', 'entrega', id,
             `Para: ${novaEntrega.funcionario} · ${novaEntrega.itens.length} item(ns)`,
             a.id, a.username);
+        for (const epiId of overdraft) {
+            await registrarAuditoria('estoque_negativo', 'epi', epiId,
+                `Entrega #${id} levou o estoque abaixo de 0 (venda a descoberto)`, a.id, a.username);
+        }
         res.status(201).json({ id, ...novaEntrega });
     } catch (error) {
         console.error('Erro ao criar entregas:', error);
@@ -372,7 +405,7 @@ app.post('/api/entregas', soOperadorOuAdmin, async (req, res) => {
     }
 });
 
-app.put('/api/entregas/:id', soOperadorOuAdmin, async (req, res) => {
+app.put('/api/entregas/:id', soOperadorOuAdmin, idempotente, async (req, res) => {
     const err = validarEntregaPut(req.body);
     if (err) return res.status(400).json({ error: err });
     const id = parseId(req.params.id);
@@ -389,7 +422,8 @@ app.put('/api/entregas/:id', soOperadorOuAdmin, async (req, res) => {
             await registrarAuditoria('entrega_assinada', 'entrega', id,
                 `Tipo: ${req.body.tipo_assinatura ?? '—'}`, a.id, a.username);
         else if (req.body.status === 'cancelado')
-            await registrarAuditoria('entrega_cancelada', 'entrega', id, null, a.id, a.username);
+            await registrarAuditoria('entrega_cancelada', 'entrega', id,
+                `Funcionário: ${req.body.funcionario ?? '—'}`, a.id, a.username);
         res.json({ success: true });
     } catch (error) {
         console.error('Erro ao atualizar entrega:', error);
@@ -411,7 +445,7 @@ app.get('/api/funcionarios', async (req, res) => {
     }
 });
 
-app.post('/api/funcionarios', soOperadorOuAdmin, async (req, res) => {
+app.post('/api/funcionarios', soOperadorOuAdmin, idempotente, async (req, res) => {
     const err = validarFuncionario(req.body);
     if (err) return res.status(400).json({ error: err });
     try {
@@ -434,16 +468,20 @@ app.post('/api/funcionarios', soOperadorOuAdmin, async (req, res) => {
     }
 });
 
-app.put('/api/funcionarios/:id', soOperadorOuAdmin, async (req, res) => {
+app.put('/api/funcionarios/:id', soOperadorOuAdmin, idempotente, async (req, res) => {
     const err = validarFuncionario(req.body);
     if (err) return res.status(400).json({ error: err });
     const id = parseId(req.params.id);
     if (id === null) return res.status(400).json({ error: 'ID inválido' });
     try {
+        // LWW + auditoria: a versão sobrescrita fica recuperável via
+        // POST /api/audit-log/:id/restaurar em vez de simplesmente sumir.
+        const anterior = await buscarFuncionario(id);
+        if (!anterior) return res.status(404).json({ error: 'Funcionário não encontrado' });
         await atualizarFuncionario(id, req.body);
         const a = actor(req);
-        await registrarAuditoria('funcionario_atualizado', 'funcionario', id,
-            req.body.nome ?? null, a.id, a.username);
+        await registrarAuditoria('funcionario_sobrescrito', 'funcionario', id,
+            JSON.stringify({ de: anterior, para: req.body }), a.id, a.username);
         res.json({ success: true });
     } catch (error) {
         console.error('Erro ao atualizar funcionário:', error);
@@ -451,7 +489,7 @@ app.put('/api/funcionarios/:id', soOperadorOuAdmin, async (req, res) => {
     }
 });
 
-app.delete('/api/funcionarios/:id', soOperadorOuAdmin, async (req, res) => {
+app.delete('/api/funcionarios/:id', soOperadorOuAdmin, idempotente, async (req, res) => {
     const id = parseId(req.params.id);
     if (id === null) return res.status(400).json({ error: 'ID inválido' });
     try {
@@ -481,7 +519,7 @@ app.get('/api/epis', async (req, res) => {
     }
 });
 
-app.post('/api/epis', soOperadorOuAdmin, async (req, res) => {
+app.post('/api/epis', soOperadorOuAdmin, idempotente, async (req, res) => {
     const err = validarEpi(req.body);
     if (err) return res.status(400).json({ error: err });
     try {
@@ -495,15 +533,18 @@ app.post('/api/epis', soOperadorOuAdmin, async (req, res) => {
     }
 });
 
-app.put('/api/epis/:id', soOperadorOuAdmin, async (req, res) => {
+app.put('/api/epis/:id', soOperadorOuAdmin, idempotente, async (req, res) => {
     const err = validarEpi(req.body);
     if (err) return res.status(400).json({ error: err });
     const id = parseId(req.params.id);
     if (id === null) return res.status(400).json({ error: 'ID inválido' });
     try {
+        const anterior = await buscarEpi(id);
+        if (!anterior) return res.status(404).json({ error: 'EPI não encontrado' });
         await atualizarEpi(id, req.body);
         const a = actor(req);
-        await registrarAuditoria('epi_atualizado', 'epi', id, req.body.nome ?? null, a.id, a.username);
+        await registrarAuditoria('epi_sobrescrito', 'epi', id,
+            JSON.stringify({ de: anterior, para: req.body }), a.id, a.username);
         res.json({ success: true });
     } catch (error) {
         console.error('Erro ao atualizar EPI:', error);
@@ -511,7 +552,7 @@ app.put('/api/epis/:id', soOperadorOuAdmin, async (req, res) => {
     }
 });
 
-app.delete('/api/epis/:id', soOperadorOuAdmin, async (req, res) => {
+app.delete('/api/epis/:id', soOperadorOuAdmin, idempotente, async (req, res) => {
     const id = parseId(req.params.id);
     if (id === null) return res.status(400).json({ error: 'ID inválido' });
     try {
@@ -552,7 +593,7 @@ app.delete('/api/cargos/:id', soOperadorOuAdmin, async (req, res) => {
 
 // ─── Biometrias ───────────────────────────────────────────────────────────────
 
-app.post('/api/biometrias', soOperadorOuAdmin, async (req, res) => {
+app.post('/api/biometrias', soOperadorOuAdmin, idempotente, async (req, res) => {
     const err = validarBiometria(req.body);
     if (err) return res.status(400).json({ error: err });
     try {
@@ -592,7 +633,7 @@ app.patch('/api/biometrias/:id/descriptor', soOperadorOuAdmin, async (req, res) 
     }
 });
 
-app.delete('/api/biometrias/:id', soOperadorOuAdmin, async (req, res) => {
+app.delete('/api/biometrias/:id', soOperadorOuAdmin, idempotente, async (req, res) => {
     const id = parseId(req.params.id);
     if (id === null) return res.status(400).json({ error: 'ID inválido' });
     try {
@@ -672,4 +713,37 @@ app.get('/api/audit-log', soAdmin, async (req, res) => {
         ]);
         res.json({ data, total });
     } catch { res.status(500).json({ error: 'Erro ao buscar log de auditoria' }); }
+});
+
+const RESTAURAVEIS: Record<string, { buscar: (id: number) => Promise<any>,
+                                     atualizar: (id: number, dados: any) => Promise<void>,
+                                     acaoLog: string }> = {
+    funcionario: { buscar: buscarFuncionario, atualizar: atualizarFuncionario, acaoLog: 'funcionario_restaurado' },
+    epi:         { buscar: buscarEpi,         atualizar: atualizarEpi,         acaoLog: 'epi_restaurado' },
+};
+
+app.post('/api/audit-log/:id/restaurar', soAdmin, async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'ID inválido' });
+    try {
+        const log = await buscarAuditLog(id);
+        if (!log) return res.status(404).json({ error: 'Registro de auditoria não encontrado' });
+        if (!log.acao.endsWith('_sobrescrito') || !(log.entidade in RESTAURAVEIS))
+            return res.status(400).json({ error: 'Este evento de auditoria não é restaurável' });
+
+        const { buscar, atualizar, acaoLog } = RESTAURAVEIS[log.entidade];
+        const { de } = JSON.parse(log.detalhe);
+        const atual = await buscar(log.entidade_id);
+        if (!atual) return res.status(410).json({ error: 'Registro original foi excluído' });
+
+        await atualizar(log.entidade_id, de);
+        const a = actor(req);
+        await registrarAuditoria(acaoLog, log.entidade, log.entidade_id,
+            JSON.stringify({ de: atual, para: de, audit_ref: id }), a.id, a.username);
+        res.json({ success: true });
+    } catch (e: any) {
+        if (String(e?.message).includes('UNIQUE'))
+            return res.status(409).json({ error: 'Restauração conflita com dado atual (UNIQUE): ' + e.message });
+        res.status(500).json({ error: 'Erro ao restaurar' });
+    }
 });

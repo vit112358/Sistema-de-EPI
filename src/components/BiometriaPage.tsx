@@ -4,7 +4,7 @@ import type { Funcionario, Biometria, Toast } from "../types";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { fmtDateStr } from "../helpers";
 import { extractDescriptor, descriptorToJson, detectLandmarks, computeEAR } from "../faceApi";
-import { apiFetch } from "../api";
+import { salvarBiometriaOffline, deletarBiometriaOffline } from "../offline/dataLayer";
 
 const LIVENESS_TIMEOUT = 20;
 const PEAK_WINDOW      = 15;
@@ -276,13 +276,8 @@ export function BiometriaPage({ funcionarios, setFuncionarios, toast }: Props) {
         setTimeout(async () => {
           const qualidade = descriptor_json ? 99 : +(90 + Math.random() * 9).toFixed(1);
           const novaBio: Biometria = { funcionario_id: func!.id!, tipo: type!, data: new Date().toISOString().split("T")[0], qualidade, imagem_base64: imagemBase64, descriptor_json };
-          try {
-            const res = await apiFetch('/api/biometrias', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(novaBio) });
-            const data = await res.json();
-            setFuncionarios(prev => prev.map(f => f.id === func!.id ? { ...f, biometrias: [...f.biometrias, { ...novaBio, id: data.id }] } : f));
-          } catch {
-            setFuncionarios(prev => prev.map(f => f.id === func!.id ? { ...f, biometrias: [...f.biometrias, novaBio] } : f));
-          }
+          const id = await salvarBiometriaOffline(novaBio);
+          setFuncionarios(prev => prev.map(f => f.id === func!.id ? { ...f, biometrias: [...f.biometrias, { ...novaBio, id }] } : f));
           setScanning(false);
           setDone(true);
           toast(`Biometria ${type === "facial" ? "facial" : "digital"} registrada!`, "success");
@@ -422,8 +417,7 @@ export function BiometriaPage({ funcionarios, setFuncionarios, toast }: Props) {
 
   const deleteBio = async (bioId: number, funcId: number) => {
     try {
-      const res = await apiFetch(`/api/biometrias/${bioId}`, { method: 'DELETE' });
-      if (!res.ok) { toast("Erro ao excluir biometria.", "error"); setConfirm(null); return; }
+      await deletarBiometriaOffline(bioId);
       setFuncionarios(prev => prev.map(f => f.id === funcId ? { ...f, biometrias: f.biometrias.filter((b: Biometria) => b.id !== bioId) } : f));
       toast("Biometria excluída.", "info");
     } catch (err) {

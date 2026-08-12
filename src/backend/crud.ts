@@ -22,7 +22,12 @@ export interface Entrega {
 }
 
 // CREATE
-export function criarEntrega(entrega: Entrega): Promise<number> {
+// Estoque é aditivo/transacional no servidor: duas entregas offline do mesmo EPI
+// ambas se aplicam quando sincronizam (`MAX(0, estoque - qtd)` abaixo trava em 0).
+// O único risco é vender a última unidade duas vezes; bloquear seria pior que o
+// problema, então permitimos a venda a descoberto e apenas sinalizamos no audit
+// log (`overdraft`, usado por POST /api/entregas) em vez de rejeitar a entrega.
+export function criarEntrega(entrega: Entrega): Promise<{ id: number; overdraft: number[] }> {
     return new Promise((resolve, reject) => {
         const sqlEntrega = `INSERT INTO entregas (funcionario_id, funcionario, status, tipo_assinatura, confianca, data, assinatura_img) VALUES (?, ?, ?, ?, ?, ?, ?)`;
 
@@ -47,7 +52,7 @@ export function criarEntrega(entrega: Entrega): Promise<number> {
                 if (!entrega.itens || entrega.itens.length === 0) {
                     return db.run('COMMIT', (err) => {
                         if (err) return rollback(err);
-                        resolve(entregaId);
+                        resolve({ id: entregaId, overdraft: [] });
                     });
                 }
 
@@ -58,18 +63,34 @@ export function criarEntrega(entrega: Entrega): Promise<number> {
                 stmt.finalize((err) => {
                     if (err) return rollback(err);
 
-                    const stockStmt = db.prepare(`UPDATE epis SET estoque = MAX(0, estoque - ?) WHERE id = ?`);
-                    entrega.itens.forEach(item => {
-                        stockStmt.run(item.qtd, item.epi_id);
-                    });
-                    stockStmt.finalize((err) => {
-                        if (err) return rollback(err);
+                    const qtdPorEpi = new Map<number, number>();
+                    entrega.itens.forEach(item => qtdPorEpi.set(item.epi_id, (qtdPorEpi.get(item.epi_id) ?? 0) + item.qtd));
+                    const epiIds = [...qtdPorEpi.keys()];
 
-                        db.run('COMMIT', (err) => {
+                    db.all(
+                        `SELECT id, estoque FROM epis WHERE id IN (${epiIds.map(() => '?').join(',')})`,
+                        epiIds,
+                        (err, rows: { id: number; estoque: number }[]) => {
                             if (err) return rollback(err);
-                            resolve(entregaId);
-                        });
-                    });
+
+                            const overdraft = rows
+                                .filter(r => (qtdPorEpi.get(r.id) ?? 0) > r.estoque)
+                                .map(r => r.id);
+
+                            const stockStmt = db.prepare(`UPDATE epis SET estoque = MAX(0, estoque - ?) WHERE id = ?`);
+                            entrega.itens.forEach(item => {
+                                stockStmt.run(item.qtd, item.epi_id);
+                            });
+                            stockStmt.finalize((err) => {
+                                if (err) return rollback(err);
+
+                                db.run('COMMIT', (err) => {
+                                    if (err) return rollback(err);
+                                    resolve({ id: entregaId, overdraft });
+                                });
+                            });
+                        },
+                    );
                 });
             });
         });
@@ -238,6 +259,15 @@ export function atualizarFuncionario(id: number, dados: Partial<Funcionario>): P
     });
 }
 
+// READ single-row — usado pelo log de sobrescrita e pela restauração (não inclui biometrias)
+export function buscarFuncionario(id: number): Promise<Funcionario | undefined> {
+    return new Promise((resolve, reject) => {
+        db.get(`SELECT * FROM funcionarios WHERE id = ?`, [id], (err, row: any) => {
+            if (err) reject(err); else resolve(row);
+        });
+    });
+}
+
 export function temEntregasPendentes(funcionario_id: number): Promise<boolean> {
     return new Promise((resolve, reject) => {
         db.get(
@@ -319,6 +349,14 @@ export function atualizarEpi(id: number, dados: Partial<Epi>): Promise<void> {
 }
 
 // DELETE EPI
+export function buscarEpi(id: number): Promise<Epi | undefined> {
+    return new Promise((resolve, reject) => {
+        db.get(`SELECT * FROM epis WHERE id = ?`, [id], (err, row: any) => {
+            if (err) reject(err); else resolve(row);
+        });
+    });
+}
+
 export function deletarEpi(id: number): Promise<void> {
     return new Promise((resolve, reject) => {
         const sql = `DELETE FROM epis WHERE id = ?`;
@@ -551,6 +589,36 @@ export function contarAuditLog({ acao = null, usuario = null }: {
             `SELECT COUNT(*) as total FROM audit_log WHERE (? IS NULL OR acao = ?) AND (? IS NULL OR usuario = ?)`,
             [acao, acao, usuario, usuario],
             (err, row: any) => { if (err) reject(err); else resolve(row?.total ?? 0); },
+        );
+    });
+}
+
+export function buscarAuditLog(id: number): Promise<any | undefined> {
+    return new Promise((resolve, reject) => {
+        db.get(`SELECT * FROM audit_log WHERE id = ?`, [id], (err, row: any) => {
+            if (err) reject(err); else resolve(row);
+        });
+    });
+}
+
+// ─── Idempotência (fila de sincronização offline) ──────────────────────────────
+// Tabela SQLite (não Map em memória): sobrevive a restart do processo entre a
+// escrita commitada e o retry do drain() após a resposta se perder na rede.
+
+export function buscarIdempotencyKey(key: string): Promise<{ status: number; body: string } | undefined> {
+    return new Promise((resolve, reject) => {
+        db.get(`SELECT status, body FROM idempotency_keys WHERE key = ?`, [key], (err, row: any) => {
+            if (err) reject(err); else resolve(row);
+        });
+    });
+}
+
+export function salvarIdempotencyKey(key: string, status: number, body: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        db.run(
+            `INSERT OR IGNORE INTO idempotency_keys (key, status, body, created_at) VALUES (?, ?, ?, ?)`,
+            [key, status, body, Date.now()],
+            (err) => { if (err) reject(err); else resolve(); },
         );
     });
 }

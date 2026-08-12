@@ -113,6 +113,15 @@ const INIT_AUDIT_LOG = `
   );
 `;
 
+const INIT_IDEMPOTENCY_KEYS = `
+  CREATE TABLE IF NOT EXISTS idempotency_keys (
+    key TEXT PRIMARY KEY,
+    status INTEGER NOT NULL,
+    body TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+`;
+
 const INIT_EPIS = `
   CREATE TABLE IF NOT EXISTS epis (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,6 +153,11 @@ export function inicializarBancoDeDados() {
         db.run(INIT_AUDIT_LOG, (err) => {
             if (err) console.error('Erro ao criar tabela audit_log:', err.message);
             else console.log('Tabela "audit_log" verificada/criada com sucesso.');
+        });
+
+        db.run(INIT_IDEMPOTENCY_KEYS, (err) => {
+            if (err) console.error('Erro ao criar tabela idempotency_keys:', err.message);
+            else console.log('Tabela "idempotency_keys" verificada/criada com sucesso.');
         });
 
         db.run(INIT_USUARIOS, (err) => {

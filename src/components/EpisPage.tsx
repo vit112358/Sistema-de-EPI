@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Epi } from "../types";
+import { nextTempId } from "../offline/ids";
 import type { Toast } from "../types";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DateInput } from "./DateInput";
@@ -113,7 +114,7 @@ export function EpisPage({ epis, setEpis, toast }: Props) {
       setEpis(prev => prev.map(e => e.id === f.id ? f : e));
       toast("EPI atualizado com sucesso!", "success");
     } else {
-      const novoEpi = { ...f, id: Date.now() };
+      const novoEpi = { ...f, id: nextTempId() };
       setEpis(prev => [...prev, novoEpi]);
       toast("EPI cadastrado com sucesso!", "success");
     }

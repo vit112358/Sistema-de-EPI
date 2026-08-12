@@ -1,8 +1,8 @@
 import { openDB, type IDBPDatabase } from 'idb';
-import type { SyncOperation } from './types';
+import type { IdMapping, SyncOperation } from './types';
 import { isTempId } from './ids';
 
-export type StoreName = 'epis' | 'funcionarios' | 'entregas' | 'cargos' | 'usuarios' | 'biometrias';
+export type StoreName = 'epis' | 'funcionarios' | 'entregas' | 'cargos' | 'usuarios' | 'biometrias' | 'sync_queue' | 'id_map';
 
 const DB_NAME = 'segurid-offline';
 const DB_VERSION = 1;
@@ -37,6 +37,15 @@ export async function dbPut(store: StoreName, value: unknown): Promise<void> {
 
 export async function dbDelete(store: StoreName, id: IDBValidKey): Promise<void> {
   await (await getDb()).delete(store, id);
+}
+
+export async function getRealId(tempId: number): Promise<number | undefined> {
+  const row = (await (await getDb()).get('id_map', tempId)) as IdMapping | undefined;
+  return row?.realId;
+}
+
+export async function setIdMapping(mapping: IdMapping): Promise<void> {
+  await dbPut('id_map', mapping);
 }
 
 function idFromUrl(url: string): number {

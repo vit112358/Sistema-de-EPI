@@ -4,7 +4,12 @@ import Landing from "./Landing";
 import { css } from "./styles";
 import { useToast } from "./hooks/useToast";
 import type { Epi, Funcionario, Entrega, Cargo, Usuario } from "./types";
-import { getEntregas, getFuncionarios, getCargos, getEpis, getUsuarios } from "./offline/dataLayer";
+import {
+  getEntregas, getFuncionarios, getCargos, getEpis, getUsuarios,
+  criarEntregaOffline, atualizarStatusEntregaOffline,
+  criarFuncionarioOffline, atualizarFuncionarioOffline, deletarFuncionarioOffline,
+  criarEpiOffline, atualizarEpiOffline, deletarEpiOffline,
+} from "./offline/dataLayer";
 import { isReachable } from "./offline/reachability";
 import { cacheSession, readCachedSession, clearCachedSession, type SessionUser } from "./offline/session";
 
@@ -150,39 +155,23 @@ export default function App() {
       const nova = next.find(n => !prev.some(a => a.id === n.id));
       if (nova?.funcionario && nova.id && !entregasEnviadasRef.current.has(nova.id)) {
         entregasEnviadasRef.current.add(nova.id);
-        const tempId = nova.id;
-        apiFetch('/api/entregas', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            funcionario_id: nova.funcionario_id, funcionario: nova.funcionario,
-            status: nova.status, tipo_assinatura: nova.tipo_assinatura,
-            confianca: nova.confianca, data: nova.data, itens: nova.itens,
-            assinatura_img: nova.assinatura_img ?? null,
-          }),
-        })
-          .then(r => r.json())
-          .then(data => {
-            if (data.id && data.id !== tempId)
-              setEntregas(prev => prev.map(e => e.id === tempId ? { ...e, id: data.id } : e));
-            apiFetch('/api/epis').then(r => r.json()).then((updated: Epi[]) => setEpis(updated));
-          })
-          .catch(err => console.error("Falha ao salvar no banco:", err));
+        criarEntregaOffline(nova).catch(err => console.error("Falha ao salvar entrega:", err));
+        setEpis(prev => prev.map(e => {
+          const item = nova.itens.find(i => i.epi_id === e.id);
+          return item ? { ...e, estoque: Math.max(0, e.estoque - item.qtd) } : e;
+        }));
       }
     } else if (next.length === prev.length) {
       for (const nova of next) {
         const velha = prev.find(e => e.id === nova.id);
         if (velha && nova.status !== velha.status) {
-          apiFetch(`/api/entregas/${nova.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: nova.status, tipo_assinatura: nova.tipo_assinatura, confianca: nova.confianca, assinatura_img: nova.assinatura_img ?? null }),
-          })
-            .then(() => {
-              if (nova.status === 'cancelado')
-                apiFetch('/api/epis').then(r => r.json()).then((updated: Epi[]) => setEpis(updated));
-            })
-            .catch(err => console.error('Erro ao atualizar status no banco', err));
+          atualizarStatusEntregaOffline(nova).catch(err => console.error('Erro ao atualizar status da entrega', err));
+          if (nova.status === 'cancelado') {
+            setEpis(prev => prev.map(e => {
+              const item = nova.itens.find(i => i.epi_id === e.id);
+              return item ? { ...e, estoque: e.estoque + item.qtd } : e;
+            }));
+          }
         }
       }
     }
@@ -198,34 +187,19 @@ export default function App() {
       const novo = next.find(n => !prev.some(a => a.id === n.id));
       if (novo?.id && !funcionariosEnviadosRef.current.has(novo.id)) {
         funcionariosEnviadosRef.current.add(novo.id);
-        apiFetch('/api/funcionarios', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nome: novo.nome, matricula: novo.matricula, setor: novo.setor, cargo: novo.cargo, email: novo.email, telefone: novo.telefone }),
-        })
-          .then(r => r.json())
-          .then(data => console.log("Funcionário salvo no banco, BD_ID:", data.id))
-          .catch(err => console.error("Falha ao salvar funcionário no banco:", err));
+        criarFuncionarioOffline(novo).catch(err => console.error("Falha ao salvar funcionário:", err));
       }
     } else if (next.length === prev.length) {
       for (const novo of next) {
         const velho = prev.find(f => f.id === novo.id);
         if (velho && (novo.nome !== velho.nome || novo.setor !== velho.setor || novo.cargo !== velho.cargo || novo.matricula !== velho.matricula || novo.email !== velho.email || novo.telefone !== velho.telefone)) {
-          apiFetch(`/api/funcionarios/${novo.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(novo),
-          })
-            .then(() => console.log(`Funcionário ID ${novo.id} atualizado no banco.`))
-            .catch(err => console.error('Erro ao atualizar funcionário', err));
+          atualizarFuncionarioOffline(novo).catch(err => console.error('Erro ao atualizar funcionário', err));
         }
       }
     } else {
       for (const velho of prev) {
-        if (!next.some(f => f.id === velho.id)) {
-          apiFetch(`/api/funcionarios/${velho.id}`, { method: 'DELETE' })
-            .then(() => console.log(`Funcionário ID ${velho.id} deletado no banco.`))
-            .catch(err => console.error('Erro ao deletar funcionário', err));
+        if (!next.some(f => f.id === velho.id) && velho.id != null) {
+          deletarFuncionarioOffline(velho.id).catch(err => console.error('Erro ao deletar funcionário', err));
         }
       }
     }
@@ -234,20 +208,11 @@ export default function App() {
   };
 
   const criarFuncionario = async (funcData: Omit<Funcionario, 'id' | 'biometrias'>): Promise<{ ok: boolean; error?: string }> => {
-    try {
-      const res = await apiFetch('/api/funcionarios', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: funcData.nome, matricula: funcData.matricula, setor: funcData.setor, cargo: funcData.cargo, email: funcData.email, telefone: funcData.telefone }),
-      });
-      const data = await res.json();
-      if (!res.ok) return { ok: false, error: data.error || 'Erro ao criar funcionário' };
-      funcionariosEnviadosRef.current.add(data.id);
-      setFuncionarios(prev => [...prev, { ...funcData, id: data.id, biometrias: [] }]);
-      return { ok: true };
-    } catch {
-      return { ok: false, error: 'Erro de conexão com o servidor' };
-    }
+    const { ok, id, error } = await criarFuncionarioOffline(funcData);
+    if (!ok) return { ok: false, error };
+    funcionariosEnviadosRef.current.add(id!);
+    setFuncionarios(prev => [...prev, { ...funcData, id, biometrias: [] }]);
+    return { ok: true };
   };
 
   const handleSetEpis = (acao: React.SetStateAction<Epi[]>) => {
@@ -258,34 +223,19 @@ export default function App() {
       const novo = next.find(n => !prev.some(a => a.id === n.id));
       if (novo?.id && !episEnviadosRef.current.has(novo.id)) {
         episEnviadosRef.current.add(novo.id);
-        apiFetch('/api/epis', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nome: novo.nome, ca: novo.ca, cas_json: novo.cas_json ?? null, categoria: novo.categoria, estoque: novo.estoque, minimo: novo.minimo, validade: novo.validade, img: novo.img, periodicidade: novo.periodicidade, descricao: novo.descricao, norma: novo.norma, fabricante: novo.fabricante }),
-        })
-          .then(r => r.json())
-          .then(data => console.log("EPI salvo no banco com sucesso, BD_ID:", data.id))
-          .catch(err => console.error("Falha ao salvar EPI no banco:", err));
+        criarEpiOffline(novo).catch(err => console.error("Falha ao salvar EPI:", err));
       }
     } else if (next.length === prev.length) {
       for (const novo of next) {
         const velho = prev.find(e => e.id === novo.id);
         if (velho && (novo.nome !== velho.nome || novo.ca !== velho.ca || novo.estoque !== velho.estoque || novo.minimo !== velho.minimo || novo.categoria !== velho.categoria || novo.fabricante !== velho.fabricante)) {
-          apiFetch(`/api/epis/${novo.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(novo),
-          })
-            .then(() => console.log(`EPI ID ${novo.id} atualizado no banco.`))
-            .catch(err => console.error('Erro ao atualizar EPI', err));
+          atualizarEpiOffline(novo).catch(err => console.error('Erro ao atualizar EPI', err));
         }
       }
     } else {
       for (const velho of prev) {
-        if (!next.some(e => e.id === velho.id)) {
-          apiFetch(`/api/epis/${velho.id}`, { method: 'DELETE' })
-            .then(() => console.log(`EPI ID ${velho.id} deletado no banco.`))
-            .catch(err => console.error('Erro ao deletar EPI', err));
+        if (!next.some(e => e.id === velho.id) && velho.id != null) {
+          deletarEpiOffline(velho.id).catch(err => console.error('Erro ao deletar EPI', err));
         }
       }
     }
@@ -375,7 +325,7 @@ export default function App() {
             <div className="user-avatar">{currentUser.nome[0].toUpperCase()}</div>
             <div>
               <div className="user-name">{currentUser.nome}</div>
-              <div className="user-role">{currentUser.role} · v2.1</div>
+              <div className="user-role">{currentUser.role} · v0.0.1</div>
             </div>
           </div>
         </div>

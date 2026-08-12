@@ -3,6 +3,7 @@ import { jsPDF } from "jspdf";
 import type { Epi, Funcionario, Entrega, EntregaItem, Toast, TipoAssinatura } from "../types";
 import { declaracaoCompletaEpi, addDays, fmtDate, fmtDateStr } from "../helpers";
 import { apiFetch } from "../api";
+import { nextTempId } from "../offline/ids";
 import {
   compareDescriptors, descriptorToJson, extractDescriptor,
   isCurrentModelDescriptor, jsonToDescriptor
@@ -37,7 +38,7 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
   const [sigProgress, setSigProgress] = useState(0);
   const [done, setDone] = useState(false);
   const [savedAsPending, setSavedAsPending] = useState(false);
-  const [newId] = useState(Date.now());
+  const [newId] = useState(nextTempId());
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const [hasSig, setHasSig] = useState(false);
