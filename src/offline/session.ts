@@ -14,6 +14,16 @@ const KEY = 'segurid_session_cache';
 export function cacheSession(user: Usuario, exp: number): void {
   const { senha: _s, ...semSenha } = user;
   localStorage.setItem(KEY, JSON.stringify({ user: semSenha, exp } satisfies CachedSession));
+  void requestPersistentStorage();
+}
+
+// Pede ao browser pra não evictar o IndexedDB sob pressão de espaço (offline.md
+// "Fonte da verdade offline"). Sem suporte (ex.: Safari antigo) navigator.storage
+// é undefined — no-op.
+async function requestPersistentStorage(): Promise<void> {
+  if (!navigator.storage?.persist) return;
+  const granted = await navigator.storage.persist();
+  if (!granted) console.warn('Armazenamento persistente negado — dados offline podem ser apagados pelo navegador sob pressão de espaço.');
 }
 
 export function readCachedSession(): CachedSession | null {
