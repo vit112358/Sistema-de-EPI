@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { apiFetch } from "../api";
+import type { SessionUser } from "../offline/session";
 
 interface Props {
-  onSuccess: () => void;
+  onSuccess: (u: SessionUser) => void;
 }
 
 export function TrocarSenhaPage({ onSuccess }: Props) {
@@ -30,7 +31,7 @@ export function TrocarSenhaPage({ onSuccess }: Props) {
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'Erro ao trocar senha'); return; }
-      onSuccess();
+      onSuccess(data);
     } catch {
       setErr("Erro de conexão com o servidor");
     } finally {

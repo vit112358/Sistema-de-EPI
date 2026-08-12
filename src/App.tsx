@@ -4,6 +4,9 @@ import Landing from "./Landing";
 import { css } from "./styles";
 import { useToast } from "./hooks/useToast";
 import type { Epi, Funcionario, Entrega, Cargo, Usuario } from "./types";
+import { getEntregas, getFuncionarios, getCargos, getEpis, getUsuarios } from "./offline/dataLayer";
+import { isReachable } from "./offline/reachability";
+import { cacheSession, readCachedSession, clearCachedSession, type SessionUser } from "./offline/session";
 
 import { LoginPage } from "./components/LoginPage";
 import { ToastContainer } from "./components/ToastContainer";
@@ -61,6 +64,7 @@ export default function App() {
   const [showLanding, setShowLanding] = useState(true);
   const [users, setUsers] = useState<Usuario[]>([]);
   const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
+  const [resolvingSession, setResolvingSession] = useState(true);
   const [page, setPage] = useState<PageId>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [cargos, setCargos] = useState<Cargo[]>([]);
@@ -94,24 +98,45 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!currentUser) return;
     (async () => {
       try {
-        const [resE, resF, resC, resEp, resU] = await Promise.all([
-          apiFetch('/api/entregas'),
-          apiFetch('/api/funcionarios'),
-          apiFetch('/api/cargos'),
-          apiFetch('/api/epis'),
-          apiFetch('/api/users'),
-        ]);
-        if (resE.ok)  { const d: Entrega[]     = await resE.json();  if (Array.isArray(d)) setEntregas(d); }
-        if (resF.ok)  { const d: Funcionario[]  = await resF.json();  if (Array.isArray(d)) setFuncionarios(d); }
-        if (resC.ok)  { const d: Cargo[]        = await resC.json();  if (Array.isArray(d)) setCargos(d); }
-        if (resEp.ok) { const d: Epi[]          = await resEp.json(); if (Array.isArray(d)) setEpis(d); }
-        if (resU.ok)  { const d: Usuario[]      = await resU.json();  if (Array.isArray(d)) setUsers(d); }
-      } catch (err) {
-        console.error('Erro de conexão com o Backend. Usando dados locais.', err);
+        if (await isReachable()) {
+          const res = await apiFetch('/api/auth/me');
+          if (res.ok) {
+            const user: SessionUser = await res.json();
+            setCurrentUser(user);
+            cacheSession(user, user.exp);
+            setShowLanding(false);
+          } else if (res.status === 401) {
+            clearCachedSession();
+          }
+        } else {
+          const cached = readCachedSession();
+          if (cached) {
+            setCurrentUser(cached.user);
+            setShowLanding(false);
+          }
+        }
+      } catch {
+        const cached = readCachedSession();
+        if (cached) {
+          setCurrentUser(cached.user);
+          setShowLanding(false);
+        }
+      } finally {
+        setResolvingSession(false);
       }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    (async () => {
+      // offline: sem rede/servidor, cada get* cai para o IndexedDB local (Fase 2)
+      const [e, f, c, ep, u] = await Promise.all([
+        getEntregas(), getFuncionarios(), getCargos(), getEpis(), getUsuarios(),
+      ]);
+      setEntregas(e); setFuncionarios(f); setCargos(c); setEpis(ep); setUsers(u);
     })();
   }, [currentUser]);
 
@@ -270,12 +295,26 @@ export default function App() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  if (resolvingSession) return (
+    <>
+      <style>{css}</style>
+      <div className="login-screen">
+        <div className="login-bg" />
+        <span className="pulse">●</span>
+      </div>
+    </>
+  );
+
   if (showLanding) return <Landing onEnter={() => setShowLanding(false)} />;
 
   if (!currentUser) return (
     <>
       <style>{css}</style>
-      <LoginPage onLogin={(user) => { setCurrentUser(user); if (user.role === 'colaborador') setPage('entregas'); }} />
+      <LoginPage onLogin={(user) => {
+        setCurrentUser(user);
+        cacheSession(user, user.exp);
+        if (user.role === 'colaborador') setPage('entregas');
+      }} />
       <ToastContainer toasts={toasts} />
     </>
   );
@@ -283,7 +322,10 @@ export default function App() {
   if (currentUser.trocar_senha === 1) return (
     <>
       <style>{css}</style>
-      <TrocarSenhaPage onSuccess={() => setCurrentUser(u => u ? { ...u, trocar_senha: 0 } : u)} />
+      <TrocarSenhaPage onSuccess={(user) => {
+        setCurrentUser(user);
+        cacheSession(user, user.exp);
+      }} />
     </>
   );
 
@@ -350,7 +392,7 @@ export default function App() {
                   ⚠️ {stockAlerts + pendentes} alerta{(stockAlerts + pendentes) !== 1 ? "s" : ""}
                 </div>
               )}
-              <button className="btn btn-danger btn-sm" onClick={() => { logout(); setCurrentUser(null); setShowLanding(true); }}>Sair</button>
+              <button className="btn btn-danger btn-sm" onClick={() => { logout(); clearCachedSession(); setCurrentUser(null); setShowLanding(true); }}>Sair</button>
             </div>
           </div>
           <div className="content">

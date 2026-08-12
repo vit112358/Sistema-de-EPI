@@ -16,6 +16,7 @@ if (!process.env.JWT_SECRET) {
     process.exit(1);
 }
 const JWT_SECRET: string = process.env.JWT_SECRET;
+const SESSION_TTL_SECONDS = 8 * 60 * 60; // 1 turno — fonte única usada no exp do JWT, no maxAge do cookie e devolvida ao cliente para cache de sessão offline
 
 // tokens revogados: Map<jti, expiryMs> — limpo a cada hora para remover JTIs já expirados
 const revokedJtis = new Map<string, number>();
@@ -34,6 +35,8 @@ app.use(cors({
             !origin ||
             origin === 'http://localhost:5173' ||
             origin === 'http://127.0.0.1:5173' ||
+            origin === 'http://localhost:4173' ||  // vite preview — usado nos testes de PWA/offline (build real, SW ativo)
+            origin === 'http://127.0.0.1:4173' ||
             origin === 'https://segurid.com.br' ||
             /^https:\/\/[a-z0-9-]+\.segurid\.com\.br$/.test(origin)
         ) {
@@ -94,19 +97,19 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 
         const { senha: _s, ...userSemSenha } = user;
         const jti = randomUUID();
+        const exp = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
         const token = jwt.sign(
-            { id: userSemSenha.id, username: userSemSenha.username, role: userSemSenha.role, trocar_senha: userSemSenha.trocar_senha ?? 0, jti },
-            JWT_SECRET,
-            { expiresIn: '8h' }
+            { id: userSemSenha.id, username: userSemSenha.username, role: userSemSenha.role, trocar_senha: userSemSenha.trocar_senha ?? 0, jti, exp },
+            JWT_SECRET
         );
         res.cookie('epi_session', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'strict',
-            maxAge: 8 * 60 * 60 * 1000,
+            maxAge: SESSION_TTL_SECONDS * 1000,
             path: '/',
         });
-        res.json(userSemSenha);
+        res.json({ ...userSemSenha, exp });
     } catch {
         res.status(500).json({ error: 'Erro interno' });
     }
@@ -156,23 +159,34 @@ app.post('/api/auth/change-password', changePwLimiter, async (req, res) => {
         // revoga token atual e emite novo sem trocar_senha
         if (payload.jti) revokedJtis.set(payload.jti, (payload.exp ?? 0) * 1000);
         const novoJti = randomUUID();
+        const novoExp = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
         const novoToken = jwt.sign(
-            { id: user.id, username: user.username, role: user.role, trocar_senha: 0, jti: novoJti },
-            JWT_SECRET,
-            { expiresIn: '8h' }
+            { id: user.id, username: user.username, role: user.role, trocar_senha: 0, jti: novoJti, exp: novoExp },
+            JWT_SECRET
         );
         res.cookie('epi_session', novoToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'strict',
-            maxAge: 8 * 60 * 60 * 1000,
+            maxAge: SESSION_TTL_SECONDS * 1000,
             path: '/',
         });
-        res.json({ success: true });
+        const usuarioAtualizado = await usuarioPublico(user.id!);
+        res.json({ ...usuarioAtualizado, exp: novoExp });
     } catch {
         res.status(500).json({ error: 'Erro interno' });
     }
 });
+
+// busca o usuário fresco no banco (sem o hash de senha) — usado por /me e change-password,
+// que precisam devolver o estado atual do usuário, não só o payload do JWT (pode estar desatualizado)
+async function usuarioPublico(id: number) {
+    const users = await listarUsuarios();
+    const user = users.find(u => u.id === id);
+    if (!user) return null;
+    const { senha: _s, ...rest } = user;
+    return rest;
+}
 
 // ─── Middleware JWT (todas as rotas abaixo exigem token válido) ───────────────
 
@@ -195,7 +209,23 @@ const autenticar = (req: express.Request, res: express.Response, next: express.N
     }
 };
 
+// pública — probe de conectividade real usado por src/offline/reachability.ts
+app.get('/api/health', (_req, res) => {
+    res.json({ ok: true });
+});
+
 app.use(autenticar);
+
+// restaura sessão ao recarregar a página (F5) — usada por src/App.tsx no mount,
+// já protegida pelo middleware acima; devolve o usuário fresco (não o payload
+// do JWT, que pode estar desatualizado) + exp para o cliente saber até quando
+// pode confiar num cache offline dessa sessão
+app.get('/api/auth/me', async (req, res) => {
+    const payload = (req as any).usuario;
+    const usuario = await usuarioPublico(payload.id);
+    if (!usuario) { res.status(401).json({ error: 'Usuário não encontrado' }); return; }
+    res.json({ ...usuario, exp: payload.exp });
+});
 
 // ─── Autorização ──────────────────────────────────────────────────────────────
 
