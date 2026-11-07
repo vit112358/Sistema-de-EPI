@@ -411,6 +411,79 @@ export function deletarCargo(id: number): Promise<void> {
     });
 }
 
+// ── TREINAMENTOS ────────────────────────────────────────────────────────────
+
+export function listarTreinamentos(): Promise<{ id: number; nome: string; periodicidade_meses: number }[]> {
+    return new Promise((resolve, reject) => {
+        db.all(`SELECT * FROM treinamentos ORDER BY nome ASC`, [], (err, rows: any[]) => {
+            if (err) reject(err); else resolve(rows);
+        });
+    });
+}
+
+export function criarTreinamento(nome: string, periodicidade_meses: number): Promise<number> {
+    return new Promise((resolve, reject) => {
+        db.run(`INSERT INTO treinamentos (nome, periodicidade_meses) VALUES (?, ?)`, [nome, periodicidade_meses], function (err) {
+            if (err) reject(err); else resolve(this.lastID);
+        });
+    });
+}
+
+export function atualizarTreinamento(id: number, nome: string, periodicidade_meses: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+        db.run(`UPDATE treinamentos SET nome = ?, periodicidade_meses = ? WHERE id = ?`, [nome, periodicidade_meses, id], function (err) {
+            if (err) reject(err); else resolve();
+        });
+    });
+}
+
+export function deletarTreinamento(id: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+        db.run(`DELETE FROM treinamentos WHERE id = ?`, [id], function (err) {
+            if (err) reject(err); else resolve();
+        });
+    });
+}
+
+export interface TreinamentoRegistro {
+    id: number; funcionario_id: number; funcionario: string; treinamento_id: number | null;
+    treinamento: string; periodicidade_meses: number; data: string;
+}
+
+export function listarTreinamentoRegistros(): Promise<TreinamentoRegistro[]> {
+    return new Promise((resolve, reject) => {
+        db.all(`SELECT * FROM treinamento_registros ORDER BY data DESC, id DESC`, [], (err, rows: any[]) => {
+            if (err) reject(err); else resolve(rows);
+        });
+    });
+}
+
+// um registro por treinamento selecionado, todos na mesma transação
+export function criarTreinamentoRegistros(
+    func: { id: number; nome: string }, data: string,
+    tipos: { id: number; nome: string; periodicidade_meses: number }[]
+): Promise<void> {
+    return new Promise((resolve, reject) => {
+        db.serialize(() => {
+            db.run('BEGIN');
+            const stmt = db.prepare(`INSERT INTO treinamento_registros (funcionario_id, funcionario, treinamento_id, treinamento, periodicidade_meses, data) VALUES (?, ?, ?, ?, ?, ?)`);
+            tipos.forEach(t => stmt.run(func.id, func.nome, t.id, t.nome, t.periodicidade_meses, data));
+            stmt.finalize(err => {
+                if (err) { db.run('ROLLBACK'); return reject(err); }
+                db.run('COMMIT', e => e ? reject(e) : resolve());
+            });
+        });
+    });
+}
+
+export function deletarTreinamentoRegistro(id: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+        db.run(`DELETE FROM treinamento_registros WHERE id = ?`, [id], function (err) {
+            if (err) reject(err); else resolve();
+        });
+    });
+}
+
 // ── USUÁRIOS ─────────────────────────────────────────────────────────────────
 
 export interface Usuario {

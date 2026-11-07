@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import { randomUUID, randomBytes, createHash } from 'crypto';
 import { enviarEmailReset } from './mailer.ts';
+import { listarTreinamentos, criarTreinamento, atualizarTreinamento, deletarTreinamento, listarTreinamentoRegistros, criarTreinamentoRegistros, deletarTreinamentoRegistro } from './crud.ts';
 import {buscarUsuarioPorUsernameOuEmail, criarResetToken, consumirResetToken, limparTokensExpirados, listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, buscarFuncionario, deletarFuncionario, temEntregasPendentes, listarEpis, criarEpi, atualizarEpi, buscarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, buscarImagemBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha, registrarAuditoria, listarAuditLog, contarAuditLog, buscarAuditLog, buscarIdempotencyKey, salvarIdempotencyKey} from './crud.ts';
 
 const app = express();
@@ -658,6 +659,66 @@ app.delete('/api/cargos/:id', soOperadorOuAdmin, async (req, res) => {
     if (id === null) return res.status(400).json({ error: 'ID inválido' });
     try { await deletarCargo(id); res.json({ success: true }); }
     catch { res.status(500).json({ error: 'Erro ao deletar cargo' }); }
+});
+
+// ─── Treinamentos ─────────────────────────────────────────────────────────────
+
+const validaTreinamento = (b: any): string | null => {
+    if (!b.nome?.trim()) return 'nome é obrigatório';
+    if (!Number.isInteger(b.periodicidade_meses) || b.periodicidade_meses < 1) return 'periodicidade_meses deve ser um inteiro ≥ 1';
+    return null;
+};
+app.get('/api/treinamentos', async (_req, res) => {
+    try { res.json(await listarTreinamentos()); }
+    catch { res.status(500).json({ error: 'Erro ao buscar treinamentos' }); }
+});
+app.post('/api/treinamentos', soOperadorOuAdmin, async (req, res) => {
+    const erro = validaTreinamento(req.body);
+    if (erro) return res.status(400).json({ error: erro });
+    const nome = req.body.nome.trim();
+    try { const id = await criarTreinamento(nome, req.body.periodicidade_meses); res.status(201).json({ id, nome, periodicidade_meses: req.body.periodicidade_meses }); }
+    catch { res.status(500).json({ error: 'Erro ao criar treinamento' }); }
+});
+app.put('/api/treinamentos/:id', soOperadorOuAdmin, async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'ID inválido' });
+    const erro = validaTreinamento(req.body);
+    if (erro) return res.status(400).json({ error: erro });
+    try { await atualizarTreinamento(id, req.body.nome.trim(), req.body.periodicidade_meses); res.json({ success: true }); }
+    catch { res.status(500).json({ error: 'Erro ao atualizar treinamento' }); }
+});
+app.delete('/api/treinamentos/:id', soOperadorOuAdmin, async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'ID inválido' });
+    try { await deletarTreinamento(id); res.json({ success: true }); }
+    catch { res.status(500).json({ error: 'Erro ao deletar treinamento' }); }
+});
+
+// ─── Registros de treinamento (operação) ─────────────────────────────────────
+
+app.get('/api/treinamento-registros', async (_req, res) => {
+    try { res.json(await listarTreinamentoRegistros()); }
+    catch { res.status(500).json({ error: 'Erro ao buscar registros de treinamento' }); }
+});
+app.post('/api/treinamento-registros', soOperadorOuAdmin, async (req, res) => {
+    const { funcionario_id, data, treinamento_ids } = req.body;
+    if (!Number.isInteger(funcionario_id)) return res.status(400).json({ error: 'funcionario_id inválido' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data ?? '')) return res.status(400).json({ error: 'data inválida (AAAA-MM-DD)' });
+    if (!Array.isArray(treinamento_ids) || treinamento_ids.length === 0) return res.status(400).json({ error: 'selecione ao menos um treinamento' });
+    try {
+        const func = await buscarFuncionario(funcionario_id);
+        if (!func) return res.status(404).json({ error: 'Funcionário não encontrado' });
+        const tipos = (await listarTreinamentos()).filter(t => treinamento_ids.includes(t.id));
+        if (tipos.length !== new Set(treinamento_ids).size) return res.status(400).json({ error: 'treinamento inexistente' });
+        await criarTreinamentoRegistros({ id: funcionario_id, nome: func.nome }, data, tipos);
+        res.status(201).json({ success: true });
+    } catch { res.status(500).json({ error: 'Erro ao registrar treinamento' }); }
+});
+app.delete('/api/treinamento-registros/:id', soOperadorOuAdmin, async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'ID inválido' });
+    try { await deletarTreinamentoRegistro(id); res.json({ success: true }); }
+    catch { res.status(500).json({ error: 'Erro ao excluir registro' }); }
 });
 
 // ─── Biometrias ───────────────────────────────────────────────────────────────

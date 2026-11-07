@@ -22,6 +22,10 @@ import { EntregasPage } from "./components/EntregasPage";
 import { FuncionariosPage } from "./components/FuncionariosPage";
 import { CargosPage } from "./components/CargosPage";
 import { EpisPage } from "./components/EpisPage";
+import { TreinamentosPage } from "./components/TreinamentosPage";
+import { NovoTreinamentoPage } from "./components/NovoTreinamentoPage";
+import { RelatorioTreinamentosPage } from "./components/RelatorioTreinamentosPage";
+import { HistoricoTreinamentosPage } from "./components/HistoricoTreinamentosPage";
 import { BiometriaPage } from "./components/BiometriaPage";
 import { CadastroUsuariosPage } from "./components/CadastroUsuariosPage";
 import { RelatorioTrocaPage } from "./components/RelatorioTrocaPage";
@@ -36,12 +40,16 @@ const NAV = [
   { id: "nova-entrega",       icon: "📋", label: "Nova Entrega",          section: "OPERAÇÕES"   },
   { id: "cancelar-entrega",   icon: "🚫", label: "Cancelar Entrega"                              },
   { id: "entregas",           icon: "📦", label: "Histórico de Entregas"                         },
+  { id: "novo-treinamento",   icon: "🎓", label: "Novo Treinamento"                              },
+  { id: "treinamentos",       icon: "📚", label: "Treinamentos"                                  },
   { id: "funcionarios",       icon: "👷", label: "Funcionários",          section: "CADASTROS"   },
   { id: "cargos",             icon: "🏷️", label: "Cargos"                                        },
+  { id: "tipos-treinamento",  icon: "🎓", label: "Tipos de Treinamento"                          },
   { id: "epis",               icon: "🦺", label: "EPIs"                                          },
   { id: "biometria",          icon: "👆", label: "Biometria"                                     },
   { id: "cadastro-usuarios",  icon: "👤", label: "Usuários"                                      },
   { id: "relatorio-troca",        icon: "🔄", label: "Relatório de Trocas",      section: "RELATÓRIOS"  },
+  { id: "relatorio-treinamentos", icon: "🎓", label: "Relatório de Treinamentos"                     },
   { id: "relatorios",             icon: "📊", label: "Indicadores Gerais"                            },
   { id: "epis-por-funcionario",   icon: "📄", label: "EPIs por Funcionário"                          },
   { id: "audit-log",              icon: "🔍", label: "Auditoria"                                     },
@@ -56,11 +64,15 @@ const TITLES: Record<PageId, [string, string]> = {
   "entregas":           ["Histórico de Entregas",    "Registros, assinaturas e ações pendentes"],
   "funcionarios":       ["Funcionários",             "Cadastro e edição"],
   "cargos":             ["Cargos",                   "Cadastro e edição de cargos"],
-  "epis":               ["EPIs",                     "Catálogo, estoque e edição"],
+  "novo-treinamento":   ["Novo Treinamento",         "Registrar treinamento realizado por funcionário"],
+  "treinamentos":       ["Treinamentos",             "Histórico de treinamentos realizados e vencimentos"],
+  "tipos-treinamento":  ["Tipos de Treinamento",     "Cadastro e periodicidade de treinamentos"],
+  "epis":               ["EPIs",                    "Catálogo, estoque e edição"],
   "biometria":          ["Biometria",                "Cadastro e gerenciamento"],
   "cadastro-usuarios":  ["Usuários",                 "Gerenciamento de usuários do sistema"],
   "relatorio-troca":        ["Relatório de Trocas",      "Calendário de substituição de EPIs por colaborador"],
-  "relatorios":             ["Indicadores Gerais",       "Performance e conformidade"],
+  "relatorio-treinamentos": ["Relatório de Treinamentos", "Vencimentos, alertas e treinamentos nunca realizados"],
+  "relatorios":             ["Indicadores Gerais",      "Performance e conformidade"],
   "epis-por-funcionario":   ["EPIs por Funcionário",     "Fichas de entrega consolidadas por colaborador"],
   "audit-log":              ["Auditoria",                "Histórico de ações: assinaturas, cancelamentos e alterações"],
 };
@@ -362,6 +374,10 @@ export default function App() {
             {page === "entregas"          && <EntregasPage       entregas={entregas} setEntregas={handleSetEntregas} epis={epis} funcionarios={funcionarios} currentUserRole={currentUser.role} toast={toast} />}
             {page === "funcionarios"      && <FuncionariosPage   funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} onAddFuncionario={criarFuncionario} cargos={cargos} toast={toast} />}
             {page === "cargos"            && <CargosPage         cargos={cargos} setCargos={setCargos} toast={toast} />}
+            {page === "tipos-treinamento" && <TreinamentosPage   toast={toast} />}
+            {page === "novo-treinamento"  && <NovoTreinamentoPage funcionarios={funcionarios} toast={toast} onNav={(p) => setPage(p as PageId)} />}
+            {page === "treinamentos"      && <HistoricoTreinamentosPage toast={toast} />}
+            {page === "relatorio-treinamentos" && <RelatorioTreinamentosPage funcionarios={funcionarios} toast={toast} />}
             {page === "epis"              && <EpisPage           epis={epis} setEpis={handleSetEpis} toast={toast} />}
             {page === "biometria"         && <BiometriaPage      funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} toast={toast} />}
             {page === "cadastro-usuarios" && <CadastroUsuariosPage users={users} setUsers={setUsers} currentUser={currentUser} toast={toast} />}

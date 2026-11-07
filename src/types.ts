@@ -65,6 +65,22 @@ export interface Cargo {
   nome: string;
 }
 
+export interface Treinamento {
+  id: number;
+  nome: string;
+  periodicidade_meses: number;
+}
+
+export interface TreinamentoRegistro {
+  id: number;
+  funcionario_id: number;
+  funcionario: string;
+  treinamento_id: number | null;
+  treinamento: string;
+  periodicidade_meses: number;
+  data: string;
+}
+
 export interface Usuario {
   id?: number;
   nome: string;

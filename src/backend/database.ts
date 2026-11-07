@@ -81,6 +81,27 @@ const INIT_CARGOS = `
   );
 `;
 
+const INIT_TREINAMENTOS = `
+  CREATE TABLE IF NOT EXISTS treinamentos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL UNIQUE,
+    periodicidade_meses INTEGER NOT NULL CHECK (periodicidade_meses > 0)
+  );
+`;
+
+// ponytail: nome/periodicidade copiados no registro para o histórico sobreviver a edição/exclusão do tipo
+const INIT_TREINAMENTO_REGISTROS = `
+  CREATE TABLE IF NOT EXISTS treinamento_registros (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    funcionario_id INTEGER NOT NULL,
+    funcionario TEXT NOT NULL,
+    treinamento_id INTEGER,
+    treinamento TEXT NOT NULL,
+    periodicidade_meses INTEGER NOT NULL,
+    data TEXT NOT NULL
+  );
+`;
+
 const INIT_USUARIOS = `
   CREATE TABLE IF NOT EXISTS usuarios (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -216,6 +237,13 @@ export function inicializarBancoDeDados() {
         db.run(INIT_CARGOS, (err) => {
             if (err) console.error('Erro ao criar tabela de cargos:', err.message);
             else console.log('Tabela "cargos" verificada/criada com sucesso.');
+        });
+
+        db.run(INIT_TREINAMENTOS, (err) => {
+            if (err) console.error('Erro ao criar tabela de treinamentos:', err.message);
+        });
+        db.run(INIT_TREINAMENTO_REGISTROS, (err) => {
+            if (err) console.error('Erro ao criar tabela de treinamento_registros:', err.message);
         });
 
         db.run(INIT_BIOMETRIAS, (err) => {
