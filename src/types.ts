@@ -72,6 +72,7 @@ export interface Usuario {
   senha?: string;
   role: string;
   trocar_senha?: number;
+  email?: string | null;
 }
 
 export interface Toast {

@@ -29,6 +29,7 @@ import { RelatoriosPage } from "./components/RelatoriosPage";
 import { EpisPorFuncionarioPage } from "./components/EpisPorFuncionarioPage";
 import { AuditLogPage } from "./components/AuditLogPage";
 import { TrocarSenhaPage } from "./components/TrocarSenhaPage";
+import { ResetSenhaPage } from "./components/ResetSenhaPage";
 
 const NAV = [
   { id: "dashboard",          icon: "⬛", label: "Dashboard",            section: "PRINCIPAL"   },
@@ -252,6 +253,15 @@ export default function App() {
         <div className="login-bg" />
         <span className="pulse">●</span>
       </div>
+    </>
+  );
+
+  // link de "esqueci a senha": /?token=... — sem router, detecta no render (e limpa a URL ao concluir)
+  const resetToken = !currentUser ? new URLSearchParams(window.location.search).get('token') : null;
+  if (resetToken) return (
+    <>
+      <style>{css}</style>
+      <ResetSenhaPage token={resetToken} onConcluido={() => { window.location.replace('/'); }} />
     </>
   );
 

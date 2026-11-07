@@ -4,8 +4,9 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
-import { randomUUID } from 'crypto';
-import {listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, buscarFuncionario, deletarFuncionario, temEntregasPendentes, listarEpis, criarEpi, atualizarEpi, buscarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, buscarImagemBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha, registrarAuditoria, listarAuditLog, contarAuditLog, buscarAuditLog, buscarIdempotencyKey, salvarIdempotencyKey} from './crud.ts';
+import { randomUUID, randomBytes, createHash } from 'crypto';
+import { enviarEmailReset } from './mailer.ts';
+import {buscarUsuarioPorUsernameOuEmail, criarResetToken, consumirResetToken, limparTokensExpirados, listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, buscarFuncionario, deletarFuncionario, temEntregasPendentes, listarEpis, criarEpi, atualizarEpi, buscarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, buscarImagemBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha, registrarAuditoria, listarAuditLog, contarAuditLog, buscarAuditLog, buscarIdempotencyKey, salvarIdempotencyKey} from './crud.ts';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -55,7 +56,8 @@ app.use(cookieParser());
 
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: 5,
+    limit: 10,
+    skipSuccessfulRequests: true, // só falhas contam; logins certos não gastam cota
     message: { error: 'Muitas tentativas. Tente novamente em 15 minutos.' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -179,6 +181,66 @@ app.post('/api/auth/change-password', changePwLimiter, async (req, res) => {
         });
         const usuarioAtualizado = await usuarioPublico(user.id!);
         res.json({ ...usuarioAtualizado, exp: novoExp });
+    } catch {
+        res.status(500).json({ error: 'Erro interno' });
+    }
+});
+
+// ─── Esqueci minha senha (rotas públicas) ─────────────────────────────────────
+
+const RESET_TTL_MS = 60 * 60 * 1000; // 1 hora
+const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
+
+const forgotLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 3,
+    message: { error: 'Muitas solicitações. Tente novamente em 15 minutos.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+const resetLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    message: { error: 'Muitas tentativas. Tente novamente em 15 minutos.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+setInterval(() => { limparTokensExpirados().catch(() => {}); }, 60 * 60 * 1000);
+
+// resposta sempre igual (200 + mensagem genérica), exista o usuário ou não — evita enumeração
+app.post('/api/auth/forgot', forgotLimiter, async (req, res) => {
+    const resposta = { message: 'Se o usuário existir e tiver e-mail cadastrado, enviaremos um link de redefinição.' };
+    const { identificador } = req.body as { identificador?: string };
+    if (typeof identificador !== 'string' || !identificador.trim()) return res.status(400).json({ error: 'Informe o usuário ou e-mail' });
+    try {
+        const user = await buscarUsuarioPorUsernameOuEmail(identificador.trim());
+        if (user?.id && user.email) {
+            const token = randomBytes(32).toString('hex');
+            await criarResetToken(user.id, sha256(token), Date.now() + RESET_TTL_MS);
+            const base = process.env.APP_URL ?? `${req.protocol}://${req.get('host')}`;
+            await enviarEmailReset(user.email, user.nome, `${base}/?token=${token}`);
+            await registrarAuditoria('reset_senha_solicitado', 'usuario', user.id, `IP: ${req.ip}`, user.id, user.username);
+        }
+    } catch (e) {
+        console.error('Erro em /api/auth/forgot:', e); // não vaza para o cliente: resposta continua genérica
+    }
+    res.json(resposta);
+});
+
+app.post('/api/auth/reset', resetLimiter, async (req, res) => {
+    const { token, senha_nova } = req.body as { token?: string; senha_nova?: string };
+    if (typeof token !== 'string' || !token || typeof senha_nova !== 'string') return res.status(400).json({ error: 'token e senha_nova são obrigatórios' });
+    const errSenha = validarSenha(senha_nova);
+    if (errSenha) return res.status(400).json({ error: errSenha });
+    try {
+        const usuarioId = await consumirResetToken(sha256(token));
+        if (usuarioId === null) return res.status(400).json({ error: 'Link inválido ou expirado. Solicite um novo.' });
+        await atualizarUsuario(usuarioId, { senha: senha_nova, trocar_senha: 0 });
+        const user = await usuarioPublico(usuarioId);
+        await registrarAuditoria('senha_redefinida', 'usuario', usuarioId, `IP: ${req.ip}`, usuarioId, user?.username ?? '');
+        res.json({ success: true });
     } catch {
         res.status(500).json({ error: 'Erro interno' });
     }
@@ -329,6 +391,13 @@ function validarUsuarioPost(b: any): string | null {
     const errSenha = validarSenha(b.senha);
     if (errSenha) return errSenha;
     if (!ROLES_VALIDOS.includes(b.role)) return `role inválido; valores aceitos: ${ROLES_VALIDOS.join(', ')}`;
+    return validarEmailOpcional(b.email);
+}
+
+// e-mail é opcional (vazio/ausente = sem e-mail), mas se vier precisa ser válido
+function validarEmailOpcional(e: any): string | null {
+    if (e === undefined || e === null || e === '') return null;
+    if (typeof e !== 'string' || e.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return 'email inválido';
     return null;
 }
 
@@ -339,7 +408,7 @@ function validarUsuarioPut(b: any): string | null {
     if (b.username !== undefined && !RE_USERNAME.test(b.username)) return 'username deve ter 3–40 caracteres (letras, números, _ ou -)';
     if (b.role !== undefined && !ROLES_VALIDOS.includes(b.role)) return `role inválido; valores aceitos: ${ROLES_VALIDOS.join(', ')}`;
     if (b.senha) { const errSenha = validarSenha(b.senha); if (errSenha) return errSenha; }
-    return null;
+    return validarEmailOpcional(b.email);
 }
 
 function actor(req: express.Request): { id: number; username: string } {
@@ -664,7 +733,11 @@ app.post('/api/users', soAdmin, async (req, res) => {
         await registrarAuditoria('usuario_criado', 'usuario', id,
             `${req.body.username} (${req.body.role})`, a.id, a.username);
         res.status(201).json({ id, ...semSenha });
-    } catch { res.status(500).json({ error: 'Erro ao criar usuário' }); }
+    } catch (e: any) {
+        if (String(e?.message).includes('UNIQUE') && String(e.message).includes('email'))
+            return res.status(409).json({ error: 'E-mail já cadastrado para outro usuário' });
+        res.status(500).json({ error: 'Erro ao criar usuário' });
+    }
 });
 
 app.put('/api/users/:id', soAdmin, async (req, res) => {
@@ -678,7 +751,11 @@ app.put('/api/users/:id', soAdmin, async (req, res) => {
         await registrarAuditoria('usuario_atualizado', 'usuario', id,
             req.body.username ?? null, a.id, a.username);
         res.json({ success: true });
-    } catch { res.status(500).json({ error: 'Erro ao atualizar usuário' }); }
+    } catch (e: any) {
+        if (String(e?.message).includes('UNIQUE') && String(e.message).includes('email'))
+            return res.status(409).json({ error: 'E-mail já cadastrado para outro usuário' });
+        res.status(500).json({ error: 'Erro ao atualizar usuário' });
+    }
 });
 
 app.delete('/api/users/:id', soAdmin, async (req, res) => {

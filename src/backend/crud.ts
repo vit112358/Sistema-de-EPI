@@ -420,6 +420,7 @@ export interface Usuario {
     senha: string;
     role: string;
     trocar_senha?: number;
+    email?: string | null;
 }
 
 export function listarUsuarios(): Promise<Usuario[]> {
@@ -433,8 +434,8 @@ export function listarUsuarios(): Promise<Usuario[]> {
 export async function criarUsuario(u: Usuario): Promise<number> {
     const hash = await bcrypt.hash(u.senha!, 10);
     return new Promise((resolve, reject) => {
-        db.run(`INSERT INTO usuarios (nome, username, senha, role) VALUES (?, ?, ?, ?)`,
-            [u.nome, u.username, hash, u.role], function (err) {
+        db.run(`INSERT INTO usuarios (nome, username, senha, role, email) VALUES (?, ?, ?, ?, ?)`,
+            [u.nome, u.username, hash, u.role, u.email?.trim() || null], function (err) {
                 if (err) reject(err); else resolve(this.lastID);
             });
     });
@@ -442,8 +443,9 @@ export async function criarUsuario(u: Usuario): Promise<number> {
 
 export async function atualizarUsuario(id: number, dados: Partial<Usuario>): Promise<void> {
     const fields: string[] = [];
-    const values: (string | number)[] = [];
+    const values: (string | number | null)[] = [];
     if (dados.nome !== undefined)         { fields.push('nome = ?');         values.push(dados.nome); }
+    if (dados.email !== undefined)        { fields.push('email = ?');        values.push(dados.email?.trim() || null); }
     if (dados.username !== undefined)     { fields.push('username = ?');     values.push(dados.username); }
     if (dados.senha)                      { fields.push('senha = ?');        values.push(await bcrypt.hash(dados.senha, 10)); }
     if (dados.role !== undefined)         { fields.push('role = ?');         values.push(dados.role); }
@@ -462,6 +464,46 @@ export function atualizarHashSenha(id: number, hash: string): Promise<void> {
         db.run(`UPDATE usuarios SET senha = ? WHERE id = ?`, [hash, id], function (err) {
             if (err) reject(err); else resolve();
         });
+    });
+}
+
+// ── RESET DE SENHA (esqueci a senha) ─────────────────────────────────────────
+
+export function buscarUsuarioPorUsernameOuEmail(valor: string): Promise<Usuario | undefined> {
+    return new Promise((resolve, reject) => {
+        db.get(`SELECT * FROM usuarios WHERE username = ? OR lower(email) = lower(?)`, [valor, valor],
+            (err, row: any) => { if (err) reject(err); else resolve(row); });
+    });
+}
+
+// guarda só o hash do token; invalida tokens anteriores ainda pendentes do usuário
+export function criarResetToken(usuarioId: number, tokenHash: string, expiraEm: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+        db.serialize(() => {
+            db.run(`DELETE FROM reset_tokens WHERE usuario_id = ?`, [usuarioId]);
+            db.run(`INSERT INTO reset_tokens (usuario_id, token_hash, expira_em) VALUES (?, ?, ?)`,
+                [usuarioId, tokenHash, expiraEm], (err) => { if (err) reject(err); else resolve(); });
+        });
+    });
+}
+
+// consome o token de forma atômica (uso único): devolve o usuario_id ou null se inválido/expirado/usado
+export function consumirResetToken(tokenHash: string): Promise<number | null> {
+    return new Promise((resolve, reject) => {
+        db.run(`UPDATE reset_tokens SET usado = 1 WHERE token_hash = ? AND usado = 0 AND expira_em > ?`,
+            [tokenHash, Date.now()], function (err) {
+                if (err) return reject(err);
+                if (this.changes === 0) return resolve(null);
+                db.get(`SELECT usuario_id FROM reset_tokens WHERE token_hash = ?`, [tokenHash],
+                    (e, row: any) => { if (e) reject(e); else resolve(row?.usuario_id ?? null); });
+            });
+    });
+}
+
+export function limparTokensExpirados(): Promise<void> {
+    return new Promise((resolve, reject) => {
+        db.run(`DELETE FROM reset_tokens WHERE expira_em < ? OR usado = 1`, [Date.now()],
+            (err) => { if (err) reject(err); else resolve(); });
     });
 }
 

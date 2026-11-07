@@ -4,6 +4,7 @@
 // senha nem o token em si — o JWT real continua só no cookie httpOnly, que
 // este módulo nem consegue ler.
 import type { Usuario } from '../types';
+import { OFFLINE_ENABLED } from './flag';
 
 export interface SessionUser extends Usuario { exp: number }
 
@@ -12,6 +13,7 @@ interface CachedSession { user: Usuario; exp: number }
 const KEY = 'segurid_session_cache';
 
 export function cacheSession(user: Usuario, exp: number): void {
+  if (!OFFLINE_ENABLED) return;
   const { senha: _s, ...semSenha } = user;
   localStorage.setItem(KEY, JSON.stringify({ user: semSenha, exp } satisfies CachedSession));
   void requestPersistentStorage();
@@ -27,6 +29,7 @@ async function requestPersistentStorage(): Promise<void> {
 }
 
 export function readCachedSession(): CachedSession | null {
+  if (!OFFLINE_ENABLED) return null;
   const raw = localStorage.getItem(KEY);
   if (!raw) return null;
   try {

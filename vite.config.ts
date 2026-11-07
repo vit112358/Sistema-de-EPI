@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
@@ -12,10 +12,12 @@ const apiProxy = {
 }
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     VitePWA({
+      // flag do modo offline (ver src/offline/flag.ts): desligada = não gera nem registra o service worker
+      disable: loadEnv(mode, process.cwd(), 'VITE_').VITE_OFFLINE_ENABLED !== 'true',
       // 'prompt': não recarrega o app sozinho. Na Fase 4 isto vira um botão
       // "Atualizar" que só aplica a nova versão quando a fila de sync estiver vazia.
       registerType: 'prompt',
@@ -53,4 +55,4 @@ export default defineConfig({
   preview: {
     proxy: apiProxy,
   },
-})
+}))

@@ -88,7 +88,18 @@ const INIT_USUARIOS = `
     username TEXT NOT NULL UNIQUE,
     senha TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'operador',
-    trocar_senha INTEGER NOT NULL DEFAULT 0
+    trocar_senha INTEGER NOT NULL DEFAULT 0,
+    email TEXT
+  );
+`;
+
+const INIT_RESET_TOKENS = `
+  CREATE TABLE IF NOT EXISTS reset_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    expira_em INTEGER NOT NULL,
+    usado INTEGER NOT NULL DEFAULT 0
   );
 `;
 
@@ -172,6 +183,17 @@ export function inicializarBancoDeDados() {
                         db.run(`UPDATE usuarios SET trocar_senha = 1`);
                     });
                 }
+                // migration: e-mail para "esqueci a senha". SQLite não aceita ADD COLUMN ... UNIQUE,
+                // então a unicidade vem de um índice (NULLs não colidem entre si)
+                const criarIndiceEmail = () =>
+                    db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(email)`);
+                if (!cols.some(c => c.name === 'email')) db.run(`ALTER TABLE usuarios ADD COLUMN email TEXT`, criarIndiceEmail);
+                else criarIndiceEmail();
+            });
+
+            db.run(INIT_RESET_TOKENS, (err) => {
+                if (err) console.error('Erro ao criar tabela reset_tokens:', err.message);
+                else db.run(`DELETE FROM reset_tokens WHERE expira_em < ?`, [Date.now()]);
             });
 
             // seed: garante que sempre exista ao menos um admin

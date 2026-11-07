@@ -1,11 +1,13 @@
 import { useState } from "react";
 import type { SessionUser } from "../offline/session";
+import { EsqueceuSenhaPage } from "./EsqueceuSenhaPage";
 
 interface Props {
   onLogin: (u: SessionUser) => void;
 }
 
 export function LoginPage({ onLogin }: Props) {
+  const [esqueceu, setEsqueceu] = useState(false);
   const [username, setUsername] = useState("");
   const [pass, setPass] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -35,6 +37,8 @@ export function LoginPage({ onLogin }: Props) {
       setLoading(false);
     }
   };
+
+  if (esqueceu) return <EsqueceuSenhaPage onVoltar={() => setEsqueceu(false)} />;
 
   return (
     <div className="login-screen">
@@ -70,6 +74,9 @@ export function LoginPage({ onLogin }: Props) {
         {err && <div className="alert alert-error" style={{ marginBottom: 14 }}>⚠️ {err}</div>}
         <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center", padding: 11 }} onClick={submit} disabled={loading}>
           {loading ? <><span className="pulse">●</span> Autenticando...</> : "Entrar"}
+        </button>
+        <button type="button" onClick={() => setEsqueceu(true)} style={{ display: "block", margin: "14px auto 0", background: "none", border: "none", cursor: "pointer", color: "var(--text2)", fontSize: 12.5 }}>
+          Esqueceu a senha?
         </button>
       </div>
     </div>

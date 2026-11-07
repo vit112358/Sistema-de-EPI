@@ -15,12 +15,13 @@ interface FormState {
   username: string;
   senha: string;
   role: string;
+  email: string;
 }
 
 export function CadastroUsuariosPage({ users, setUsers, currentUser, toast }: Props) {
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState<Usuario | null>(null);
-  const [form, setForm] = useState<FormState>({ nome: "", username: "", senha: "", role: "operador" });
+  const [form, setForm] = useState<FormState>({ nome: "", username: "", senha: "", role: "operador", email: "" });
   const [confirm, setConfirm] = useState<Usuario | null>(null);
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
@@ -28,8 +29,8 @@ export function CadastroUsuariosPage({ users, setUsers, currentUser, toast }: Pr
   const totalPages = Math.max(1, Math.ceil(users.length / pageSize));
   const paginated  = users.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  const openNew = () => { setForm({ nome: "", username: "", senha: "", role: "operador" }); setEditing(null); setModal(true); };
-  const openEdit = (u: Usuario) => { setForm({ nome: u.nome, username: u.username, senha: "", role: u.role }); setEditing(u); setModal(true); };
+  const openNew = () => { setForm({ nome: "", username: "", senha: "", role: "operador", email: "" }); setEditing(null); setModal(true); };
+  const openEdit = (u: Usuario) => { setForm({ nome: u.nome, username: u.username, senha: "", role: u.role, email: u.email ?? "" }); setEditing(u); setModal(true); };
 
   const save = async () => {
     if (!form.nome.trim() || !form.username.trim() || (!editing && !form.senha.trim())) {
@@ -39,7 +40,7 @@ export function CadastroUsuariosPage({ users, setUsers, currentUser, toast }: Pr
     if (dup) { toast("Username já existe", "error"); return; }
     try {
       if (editing) {
-        const payload: Partial<Usuario> = { nome: form.nome, username: form.username, role: form.role };
+        const payload: Partial<Usuario> = { nome: form.nome, username: form.username, role: form.role, email: form.email.trim() || null };
         if (form.senha) (payload as Record<string, string>).senha = form.senha;
         const res = await apiFetch(`/api/users/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         if (!res.ok) { const d = await res.json(); toast(d.error || "Erro ao atualizar usuário", "error"); return; }
@@ -49,7 +50,7 @@ export function CadastroUsuariosPage({ users, setUsers, currentUser, toast }: Pr
         const res = await apiFetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
         const data = await res.json();
         if (!res.ok) { toast(data.error || "Erro ao criar usuário", "error"); return; }
-        setUsers(prev => [...prev, { ...form, id: data.id }]);
+        setUsers(prev => [...prev, { ...form, email: form.email.trim() || null, id: data.id }]);
         toast("Usuário criado!", "success");
       }
     } catch { toast("Erro ao salvar usuário", "error"); return; }
@@ -130,6 +131,10 @@ export function CadastroUsuariosPage({ users, setUsers, currentUser, toast }: Pr
             <div className="modal-body">
               <div className="input-group"><label className="input-label">Nome *</label><input className="input" value={form.nome} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, nome: e.target.value }))} /></div>
               <div className="input-group"><label className="input-label">Username *</label><input className="input" value={form.username} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, username: e.target.value }))} /></div>
+              <div className="input-group">
+                <label className="input-label">E-mail (para redefinir a senha)</label>
+                <input className="input" type="email" value={form.email} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, email: e.target.value }))} />
+              </div>
               <div className="input-group">
                 <label className="input-label">Senha {editing ? "(deixe em branco para manter)" : "*"}</label>
                 <input className="input" type="password" value={form.senha} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, senha: e.target.value }))} />

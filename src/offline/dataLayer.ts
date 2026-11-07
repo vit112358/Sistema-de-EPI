@@ -5,11 +5,22 @@ import { isReachable } from './reachability';
 import { isTempId, nextTempId } from './ids';
 import { enqueue } from './syncQueue';
 import { drain } from './syncService';
+import { OFFLINE_ENABLED } from './flag';
 
 // Usa apiFetch (não fetch cru): num 401 aqui é sessão inválida de verdade e o
 // logout automático (App.tsx -> onUnauthorized) deve disparar, diferente do
 // drain() da Fase 3, que precisa sobreviver a um 401 transitório sem deslogar.
 async function fetchWithCache<T extends { id?: number }>(url: string, store: StoreName): Promise<T[]> {
+  if (!OFFLINE_ENABLED) {
+    // sem modo offline: só a API, sem fallback para o IndexedDB
+    try {
+      const res = await apiFetch(url);
+      const data = res.ok ? await res.json() : [];
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  }
   if (await isReachable()) {
     try {
       const res = await apiFetch(url);
