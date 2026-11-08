@@ -21,6 +21,7 @@ import { CancelarEntregaPage } from "./components/CancelarEntregaPage";
 import { EntregasPage } from "./components/EntregasPage";
 import { FuncionariosPage } from "./components/FuncionariosPage";
 import { CargosPage } from "./components/CargosPage";
+import { CargoEpisPage } from "./components/CargoEpisPage";
 import { EpisPage } from "./components/EpisPage";
 import { TreinamentosPage } from "./components/TreinamentosPage";
 import { NovoTreinamentoPage } from "./components/NovoTreinamentoPage";
@@ -31,6 +32,7 @@ import { CadastroUsuariosPage } from "./components/CadastroUsuariosPage";
 import { RelatorioTrocaPage } from "./components/RelatorioTrocaPage";
 import { RelatoriosPage } from "./components/RelatoriosPage";
 import { EpisPorFuncionarioPage } from "./components/EpisPorFuncionarioPage";
+import { RelatorioEpisTodosPage } from "./components/RelatorioEpisTodosPage";
 import { AuditLogPage } from "./components/AuditLogPage";
 import { TrocarSenhaPage } from "./components/TrocarSenhaPage";
 import { ResetSenhaPage } from "./components/ResetSenhaPage";
@@ -44,6 +46,7 @@ const NAV = [
   { id: "treinamentos",       icon: "📚", label: "Treinamentos"                                  },
   { id: "funcionarios",       icon: "👷", label: "Funcionários",          section: "CADASTROS"   },
   { id: "cargos",             icon: "🏷️", label: "Cargos"                                        },
+  { id: "cargo-epis",         icon: "🔗", label: "EPIs por Cargo"                                },
   { id: "tipos-treinamento",  icon: "🎓", label: "Tipos de Treinamento"                          },
   { id: "epis",               icon: "🦺", label: "EPIs"                                          },
   { id: "biometria",          icon: "👆", label: "Biometria"                                     },
@@ -52,6 +55,7 @@ const NAV = [
   { id: "relatorio-treinamentos", icon: "🎓", label: "Relatório de Treinamentos"                     },
   { id: "relatorios",             icon: "📊", label: "Indicadores Gerais"                            },
   { id: "epis-por-funcionario",   icon: "📄", label: "EPIs por Funcionário"                          },
+  { id: "epis-todos",             icon: "👥", label: "EPIs - Todos os Funcionários"                  },
   { id: "audit-log",              icon: "🔍", label: "Auditoria"                                     },
 ] as const;
 
@@ -64,6 +68,7 @@ const TITLES: Record<PageId, [string, string]> = {
   "entregas":           ["Histórico de Entregas",    "Registros, assinaturas e ações pendentes"],
   "funcionarios":       ["Funcionários",             "Cadastro e edição"],
   "cargos":             ["Cargos",                   "Cadastro e edição de cargos"],
+  "cargo-epis":         ["EPIs por Cargo",           "Vínculo entre cargos e os EPIs que cada um pode receber"],
   "novo-treinamento":   ["Novo Treinamento",         "Registrar treinamento realizado por funcionário"],
   "treinamentos":       ["Treinamentos",             "Histórico de treinamentos realizados e vencimentos"],
   "tipos-treinamento":  ["Tipos de Treinamento",     "Cadastro e periodicidade de treinamentos"],
@@ -74,6 +79,7 @@ const TITLES: Record<PageId, [string, string]> = {
   "relatorio-treinamentos": ["Relatório de Treinamentos", "Vencimentos, alertas e treinamentos nunca realizados"],
   "relatorios":             ["Indicadores Gerais",      "Performance e conformidade"],
   "epis-por-funcionario":   ["EPIs por Funcionário",     "Fichas de entrega consolidadas por colaborador"],
+  "epis-todos":             ["EPIs - Todos os Funcionários", "EPIs entregues a todos os colaboradores em um único relatório"],
   "audit-log":              ["Auditoria",                "Histórico de ações: assinaturas, cancelamentos e alterações"],
 };
 
@@ -369,11 +375,12 @@ export default function App() {
           </div>
           <div className="content">
             {page === "dashboard"         && <Dashboard          epis={epis} funcionarios={funcionarios} entregas={entregas} onNav={(p) => setPage(p as PageId)} />}
-            {page === "nova-entrega"      && <NovaEntregaPage    epis={epis} setEpis={handleSetEpis} funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} entregas={entregas} setEntregas={handleSetEntregas} toast={toast} onNav={(p) => setPage(p as PageId)} currentUserRole={currentUser.role} />}
+            {page === "nova-entrega"      && <NovaEntregaPage    cargos={cargos} epis={epis}setEpis={handleSetEpis} funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} entregas={entregas} setEntregas={handleSetEntregas} toast={toast} onNav={(p) => setPage(p as PageId)} currentUserRole={currentUser.role} />}
             {page === "cancelar-entrega"  && <CancelarEntregaPage entregas={entregas} setEntregas={handleSetEntregas} toast={toast} />}
             {page === "entregas"          && <EntregasPage       entregas={entregas} setEntregas={handleSetEntregas} epis={epis} funcionarios={funcionarios} currentUserRole={currentUser.role} toast={toast} />}
             {page === "funcionarios"      && <FuncionariosPage   funcionarios={funcionarios} setFuncionarios={handleSetFuncionarios} onAddFuncionario={criarFuncionario} cargos={cargos} toast={toast} />}
             {page === "cargos"            && <CargosPage         cargos={cargos} setCargos={setCargos} toast={toast} />}
+            {page === "cargo-epis"        && <CargoEpisPage      cargos={cargos} epis={epis} toast={toast} />}
             {page === "tipos-treinamento" && <TreinamentosPage   toast={toast} />}
             {page === "novo-treinamento"  && <NovoTreinamentoPage funcionarios={funcionarios} toast={toast} onNav={(p) => setPage(p as PageId)} />}
             {page === "treinamentos"      && <HistoricoTreinamentosPage toast={toast} />}
@@ -384,6 +391,7 @@ export default function App() {
             {page === "relatorio-troca"   && <RelatorioTrocaPage epis={epis} funcionarios={funcionarios} entregas={entregas} />}
             {page === "relatorios"        && <RelatoriosPage           epis={epis} entregas={entregas} />}
             {page === "epis-por-funcionario" && <EpisPorFuncionarioPage entregas={entregas} funcionarios={funcionarios} />}
+            {page === "epis-todos"        && <RelatorioEpisTodosPage entregas={entregas} funcionarios={funcionarios} />}
             {page === "audit-log"            && <AuditLogPage />}
           </div>
         </div>

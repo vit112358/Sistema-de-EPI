@@ -81,6 +81,14 @@ const INIT_CARGOS = `
   );
 `;
 
+const INIT_CARGO_EPIS = `
+  CREATE TABLE IF NOT EXISTS cargo_epis (
+    cargo_id INTEGER NOT NULL,
+    epi_id INTEGER NOT NULL,
+    PRIMARY KEY (cargo_id, epi_id)
+  );
+`;
+
 const INIT_TREINAMENTOS = `
   CREATE TABLE IF NOT EXISTS treinamentos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -239,6 +247,9 @@ export function inicializarBancoDeDados() {
             else console.log('Tabela "cargos" verificada/criada com sucesso.');
         });
 
+        db.run(INIT_CARGO_EPIS, (err) => {
+            if (err) console.error('Erro ao criar tabela cargo_epis:', err.message);
+        });
         db.run(INIT_TREINAMENTOS, (err) => {
             if (err) console.error('Erro ao criar tabela de treinamentos:', err.message);
         });

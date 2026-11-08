@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { jsPDF } from "jspdf";
-import type { Epi, Funcionario, Entrega, EntregaItem, Toast, TipoAssinatura } from "../types";
+import type { Epi, Funcionario, Entrega, EntregaItem, Toast, TipoAssinatura, Cargo } from "../types";
 import { declaracaoCompletaEpi, addDays, fmtDate, fmtDateStr } from "../helpers";
 import { apiFetch } from "../api";
 import { nextTempId } from "../offline/ids";
@@ -11,6 +11,7 @@ import {
 import { LivenessCapture } from "./BiometriaPage";
 
 interface Props {
+  cargos: Cargo[];
   epis: Epi[];
   setEpis: (action: React.SetStateAction<Epi[]>) => void;
   funcionarios: Funcionario[];
@@ -24,7 +25,7 @@ interface Props {
 
 type EpiCaItem = Epi & { itemKey: string; ca: string; validade: string };
 
-export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFuncionarios, entregas, setEntregas, toast, onNav, currentUserRole }: Props) {
+export function NovaEntregaPage({ cargos, epis, setEpis: _setEpis, funcionarios, setFuncionarios, entregas, setEntregas, toast, onNav, currentUserRole }: Props) {
   const isAdmin = currentUserRole === "admin";
   const [step, setStep] = useState(0);
   const [func, setFunc] = useState<Funcionario | null>(null);
@@ -49,6 +50,12 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
   const [faceScore, setFaceScore] = useState<number|null>(null);
   const [faceOverride, setFaceOverride] = useState(false);
   const [refImage, setRefImage] = useState<string|null>(null);
+
+  // vínculo cargo ↔ EPI: falha de rede = lista vazia = mostra todos os EPIs (não trava a entrega)
+  const [vinculos, setVinculos] = useState<{ cargo_id: number; epi_id: number }[]>([]);
+  useEffect(() => {
+    apiFetch('/api/cargo-epis').then(r => r.json()).then(setVinculos).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (func) {
@@ -214,7 +221,10 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
     try { if (epi.cas_json) return JSON.parse(epi.cas_json); } catch {}
     return epi.ca ? [{ numero: epi.ca, validade: epi.validade || "" }] : [];
   };
-  const epiCaItems: EpiCaItem[] = epis.flatMap(epi =>
+  const cargoDoFunc = cargos.find(c => c.nome === func?.cargo);
+  const epiIdsDoCargo = new Set(vinculos.filter(v => v.cargo_id === cargoDoFunc?.id).map(v => v.epi_id));
+  const filtrarPorCargo = epiIdsDoCargo.size > 0; // cargo sem vínculo mostra todos
+  const epiCaItems: EpiCaItem[] = epis.filter(epi => !filtrarPorCargo || epiIdsDoCargo.has(epi.id!)).flatMap(epi =>
     parseCas(epi).map((ca, i) => ({ ...epi, itemKey: `${epi.id}:${i}`, ca: ca.numero, validade: ca.validade }))
   );
   const selEpis = epiCaItems.filter(item => selected.includes(item.itemKey));
@@ -395,7 +405,7 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
           <div className="card-body">
             <div className="func-grid">
               {funcionarios.map(f => (
-                <div key={f.id} className="func-card" style={{ cursor: "pointer", border: func?.id === f.id ? "1px solid var(--orange)" : undefined, background: func?.id === f.id ? "var(--orange-dim)" : undefined }} onClick={() => setFunc(f)}>
+                <div key={f.id} className="func-card" style={{ cursor: "pointer", border: func?.id === f.id ? "1px solid var(--orange)" : undefined, background: func?.id === f.id ? "var(--orange-dim)" : undefined }} onClick={() => { if (f.id !== func?.id) { setSelected([]); setQtds({}); setEpiPage(0); } setFunc(f); }}>
                   <div className="func-avatar">{f.nome[0]}</div>
                   <div><div className="func-name">{f.nome}</div><div className="func-info">{f.matricula} · {f.cargo}</div>{func?.id === f.id && <span className="badge badge-orange" style={{ marginTop: 4 }}>Selecionado</span>}</div>
                 </div>
@@ -414,6 +424,11 @@ export function NovaEntregaPage({ epis, setEpis: _setEpis, funcionarios, setFunc
         const pageItems = filtered.slice(epiPage * EPI_PAGE_SIZE, (epiPage + 1) * EPI_PAGE_SIZE);
         return (
           <div>
+            <div className="alert alert-warning" style={{ marginBottom: 14 }}>
+              {filtrarPorCargo
+                ? <>🏷️ Mostrando só os EPIs do cargo <b>{func?.cargo}</b>.</>
+                : <>⚠️ Nenhum EPI vinculado ao cargo <b>{func?.cargo}</b> — mostrando todos. Configure em Cadastros → EPIs por Cargo.</>}
+            </div>
             <div style={{ marginBottom: 14 }}>
               <input
                 className="input"

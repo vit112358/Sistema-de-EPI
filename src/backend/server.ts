@@ -6,7 +6,8 @@ import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import { randomUUID, randomBytes, createHash } from 'crypto';
 import { enviarEmailReset } from './mailer.ts';
-import { listarTreinamentos, criarTreinamento, atualizarTreinamento, deletarTreinamento, listarTreinamentoRegistros, criarTreinamentoRegistros, deletarTreinamentoRegistro } from './crud.ts';
+import { listarCargoEpis, definirEpisDoCargo } from './crud.ts';
+import { listarTreinamentos,criarTreinamento, atualizarTreinamento, deletarTreinamento, listarTreinamentoRegistros, criarTreinamentoRegistros, deletarTreinamentoRegistro } from './crud.ts';
 import {buscarUsuarioPorUsernameOuEmail, criarResetToken, consumirResetToken, limparTokensExpirados, listarEntregas, criarEntrega, atualizarStatusEntrega, listarFuncionarios, criarFuncionario, atualizarFuncionario, buscarFuncionario, deletarFuncionario, temEntregasPendentes, listarEpis, criarEpi, atualizarEpi, buscarEpi, deletarEpi, salvarBiometria, deletarBiometria, atualizarDescriptorBiometria, buscarImagemBiometria, listarCargos, criarCargo, atualizarCargo, deletarCargo, listarUsuarios, criarUsuario, atualizarUsuario, deletarUsuario, atualizarHashSenha, registrarAuditoria, listarAuditLog, contarAuditLog, buscarAuditLog, buscarIdempotencyKey, salvarIdempotencyKey} from './crud.ts';
 
 const app = express();
@@ -659,6 +660,21 @@ app.delete('/api/cargos/:id', soOperadorOuAdmin, async (req, res) => {
     if (id === null) return res.status(400).json({ error: 'ID inválido' });
     try { await deletarCargo(id); res.json({ success: true }); }
     catch { res.status(500).json({ error: 'Erro ao deletar cargo' }); }
+});
+
+// ─── Vínculo Cargo ↔ EPI ──────────────────────────────────────────────────────
+
+app.get('/api/cargo-epis', async (_req, res) => {
+    try { res.json(await listarCargoEpis()); }
+    catch { res.status(500).json({ error: 'Erro ao buscar vínculos' }); }
+});
+app.put('/api/cargos/:id/epis', soOperadorOuAdmin, async (req, res) => {
+    const id = parseId(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'ID inválido' });
+    const ids = req.body.epi_ids;
+    if (!Array.isArray(ids) || !ids.every((n: unknown) => Number.isInteger(n))) return res.status(400).json({ error: 'epi_ids deve ser uma lista de inteiros' });
+    try { await definirEpisDoCargo(id, ids); res.json({ success: true }); }
+    catch { res.status(500).json({ error: 'Erro ao salvar vínculos' }); }
 });
 
 // ─── Treinamentos ─────────────────────────────────────────────────────────────

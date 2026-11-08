@@ -405,8 +405,35 @@ export function atualizarCargo(id: number, nome: string): Promise<void> {
 
 export function deletarCargo(id: number): Promise<void> {
     return new Promise((resolve, reject) => {
+        db.run(`DELETE FROM cargo_epis WHERE cargo_id = ?`, [id]);
         db.run(`DELETE FROM cargos WHERE id = ?`, [id], function (err) {
             if (err) reject(err); else resolve();
+        });
+    });
+}
+
+// ── VÍNCULO CARGO ↔ EPI ─────────────────────────────────────────────────────
+
+export function listarCargoEpis(): Promise<{ cargo_id: number; epi_id: number }[]> {
+    return new Promise((resolve, reject) => {
+        db.all(`SELECT cargo_id, epi_id FROM cargo_epis`, [], (err, rows: any[]) => {
+            if (err) reject(err); else resolve(rows);
+        });
+    });
+}
+
+// substitui o conjunto de EPIs do cargo de uma vez (transação)
+export function definirEpisDoCargo(cargoId: number, epiIds: number[]): Promise<void> {
+    return new Promise((resolve, reject) => {
+        db.serialize(() => {
+            db.run('BEGIN');
+            db.run(`DELETE FROM cargo_epis WHERE cargo_id = ?`, [cargoId]);
+            const stmt = db.prepare(`INSERT OR IGNORE INTO cargo_epis (cargo_id, epi_id) VALUES (?, ?)`);
+            epiIds.forEach(id => stmt.run(cargoId, id));
+            stmt.finalize();
+            db.run('COMMIT', (err) => {
+                if (err) { db.run('ROLLBACK'); reject(err); } else resolve();
+            });
         });
     });
 }
